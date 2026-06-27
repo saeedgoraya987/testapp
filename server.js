@@ -6,11 +6,10 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Middleware ──
 app.use(cors());
 app.use(express.json());
 
-// ── Logging middleware (helps debug) ──
+// ── Logging middleware ──
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
@@ -26,7 +25,7 @@ const DB = {
 // ── Configuration ──
 const CONFIG = {
   HASH_TO_TON: 0.0000144,
-  DAILY_HASHES_PER_1K: 25,
+  DAILY_HASHES_PER_1K: 602, // 602 H/day for 1K POWER
   WD_MIN_HASHES: 1000,
   TON_PER_POWER: 0.0000085,
   POWER_LIFETIME_HOURS: 24,
@@ -99,12 +98,11 @@ function saveUser(user) {
 }
 
 function calculateHashesPerDay(power) {
+  // 602 H/day per 1K POWER
   return (power / 1000) * CONFIG.DAILY_HASHES_PER_1K;
 }
 
-// ═══════════════════════════════════════════════════════════
-// API ROUTES - MUST COME BEFORE STATIC FILES
-// ═══════════════════════════════════════════════════════════
+// ── API Routes ──
 
 // ── Auth ──
 app.post('/miniapp/auth', (req, res) => {
@@ -117,19 +115,50 @@ app.post('/miniapp/auth', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  try {
-    if (initData.startsWith('{')) {
-      const data = JSON.parse(initData);
-      if (data.user) {
-        user.first_name = data.user.first_name || user.first_name;
-        user.last_name = data.user.last_name || user.last_name;
-        user.username = data.user.username || user.username;
-        user.photo_url = data.user.photo_url || user.photo_url;
+  // Check if user has POWER but no active contract - create one automatically
+  if (user.power > 0 && user.contracts.length === 0) {
+    console.log(`[DEBUG] Creating automatic contract for user ${userId} with ${user.power} POWER`);
+    const contract = {
+      id: generateId(),
+      power: user.power,
+      hashes_per_day: calculateHashesPerDay(user.power),
+      amount: user.power,
+      duration: CONFIG.POWER_LIFETIME_HOURS,
+      seconds_left: CONFIG.POWER_LIFETIME_HOURS * 60 * 60,
+      progress: 0,
+      permanent: false,
+      active: true,
+      expired: false,
+      created_at: Date.now(),
+      expiresAt: Date.now() + CONFIG.POWER_LIFETIME_HOURS * 60 * 60 * 1000
+    };
+    user.contracts.push(contract);
+    saveUser(user);
+  }
+  
+  // Update existing contracts - ensure they have hashes_per_day
+  let needsUpdate = false;
+  user.contracts = user.contracts.map(c => {
+    if (!c.hashes_per_day || c.hashes_per_day === 0) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+      needsUpdate = true;
+    }
+    // Update seconds_left
+    if (c.active && !c.expired) {
+      const elapsed = (Date.now() - c.created_at) / 1000;
+      c.seconds_left = Math.max(0, (c.duration * 60 * 60) - elapsed);
+      c.progress = Math.min(1, elapsed / (c.duration * 60 * 60));
+      if (c.seconds_left <= 0) {
+        c.active = false;
+        c.expired = true;
       }
     }
-  } catch (e) {}
+    return c;
+  });
   
-  saveUser(user);
+  if (needsUpdate) {
+    saveUser(user);
+  }
   
   res.json({
     ok: true,
@@ -165,17 +194,34 @@ app.post('/miniapp/claim-welcome-bonus', (req, res) => {
   user.power = (user.power || 0) + bonus;
   user.welcome_bonus_claimed = true;
   
+  // Create mining contract for the bonus POWER
+  const contract = {
+    id: generateId(),
+    power: bonus,
+    hashes_per_day: calculateHashesPerDay(bonus),
+    amount: bonus,
+    duration: CONFIG.POWER_LIFETIME_HOURS,
+    seconds_left: CONFIG.POWER_LIFETIME_HOURS * 60 * 60,
+    progress: 0,
+    permanent: false,
+    active: true,
+    expired: false,
+    created_at: Date.now(),
+    expiresAt: Date.now() + CONFIG.POWER_LIFETIME_HOURS * 60 * 60 * 1000
+  };
+  user.contracts.push(contract);
+  
   saveUser(user);
   
   console.log(`[DEBUG] Welcome bonus claimed: ${bonus} POWER for user ${userId}`);
   res.json({
     ok: true,
     bonus: bonus,
-    new_power: user.power
+    new_power: user.power,
+    contract: contract
   });
 });
 
-// ── Also add /miniapi version ──
 app.post('/miniapi/claim-welcome-bonus', (req, res) => {
   console.log('[DEBUG] Welcome bonus endpoint hit (miniapi)!');
   const { initData } = req.body;
@@ -190,13 +236,31 @@ app.post('/miniapi/claim-welcome-bonus', (req, res) => {
   user.power = (user.power || 0) + bonus;
   user.welcome_bonus_claimed = true;
   
+  // Create mining contract for the bonus POWER
+  const contract = {
+    id: generateId(),
+    power: bonus,
+    hashes_per_day: calculateHashesPerDay(bonus),
+    amount: bonus,
+    duration: CONFIG.POWER_LIFETIME_HOURS,
+    seconds_left: CONFIG.POWER_LIFETIME_HOURS * 60 * 60,
+    progress: 0,
+    permanent: false,
+    active: true,
+    expired: false,
+    created_at: Date.now(),
+    expiresAt: Date.now() + CONFIG.POWER_LIFETIME_HOURS * 60 * 60 * 1000
+  };
+  user.contracts.push(contract);
+  
   saveUser(user);
   
   console.log(`[DEBUG] Welcome bonus claimed: ${bonus} POWER for user ${userId}`);
   res.json({
     ok: true,
     bonus: bonus,
-    new_power: user.power
+    new_power: user.power,
+    contract: contract
   });
 });
 
@@ -261,28 +325,28 @@ app.post('/miniapp/start-production', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  const hasActiveContract = user.contracts.some(c => !c.permanent && !c.expired);
+  const hasActiveContract = user.contracts.some(c => c.active && !c.expired);
   if (hasActiveContract) {
     return res.json({ ok: false, error: 'Already mining' });
   }
   
+  const powerToUse = user.power || 1000;
   const contract = {
     id: generateId(),
-    power: 100,
-    hashes_per_day: calculateHashesPerDay(100),
-    amount: 100,
-    duration: 24,
-    seconds_left: 24 * 60 * 60,
+    power: powerToUse,
+    hashes_per_day: calculateHashesPerDay(powerToUse),
+    amount: powerToUse,
+    duration: CONFIG.POWER_LIFETIME_HOURS,
+    seconds_left: CONFIG.POWER_LIFETIME_HOURS * 60 * 60,
     progress: 0,
     permanent: false,
     active: true,
     expired: false,
     created_at: Date.now(),
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+    expiresAt: Date.now() + CONFIG.POWER_LIFETIME_HOURS * 60 * 60 * 1000
   };
   
   user.contracts.push(contract);
-  user.power = (user.power || 0) + 100;
   
   saveUser(user);
   
@@ -298,28 +362,28 @@ app.post('/miniapi/start-production', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  const hasActiveContract = user.contracts.some(c => !c.permanent && !c.expired);
+  const hasActiveContract = user.contracts.some(c => c.active && !c.expired);
   if (hasActiveContract) {
     return res.json({ ok: false, error: 'Already mining' });
   }
   
+  const powerToUse = user.power || 1000;
   const contract = {
     id: generateId(),
-    power: 100,
-    hashes_per_day: calculateHashesPerDay(100),
-    amount: 100,
-    duration: 24,
-    seconds_left: 24 * 60 * 60,
+    power: powerToUse,
+    hashes_per_day: calculateHashesPerDay(powerToUse),
+    amount: powerToUse,
+    duration: CONFIG.POWER_LIFETIME_HOURS,
+    seconds_left: CONFIG.POWER_LIFETIME_HOURS * 60 * 60,
     progress: 0,
     permanent: false,
     active: true,
     expired: false,
     created_at: Date.now(),
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+    expiresAt: Date.now() + CONFIG.POWER_LIFETIME_HOURS * 60 * 60 * 1000
   };
   
   user.contracts.push(contract);
-  user.power = (user.power || 0) + 100;
   
   saveUser(user);
   
@@ -446,7 +510,7 @@ app.get('/miniapi/poll-deposit', (req, res) => {
   });
 });
 
-// ── Claim ──
+// ── Claim (Mine HASHES) ──
 app.post('/miniapp/claim', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -454,6 +518,7 @@ app.post('/miniapp/claim', (req, res) => {
   
   let totalHashes = user.hashes || 0;
   
+  // Process all contracts
   user.contracts = user.contracts.map(c => {
     if (c.permanent) return c;
     if (c.expired) return c;
@@ -469,8 +534,10 @@ app.post('/miniapp/claim', (req, res) => {
       c.expired = true;
     }
     
+    // Calculate earned hashes from active contract
     if (c.active) {
-      const earned = (c.hashes_per_day / 86400) * (elapsed / 1000);
+      const hashesPerDay = c.hashes_per_day || calculateHashesPerDay(c.power || c.amount || 1000);
+      const earned = (hashesPerDay / 86400) * (elapsed / 1000);
       totalHashes += earned;
     }
     
@@ -509,7 +576,8 @@ app.post('/miniapi/claim', (req, res) => {
     }
     
     if (c.active) {
-      const earned = (c.hashes_per_day / 86400) * (elapsed / 1000);
+      const hashesPerDay = c.hashes_per_day || calculateHashesPerDay(c.power || c.amount || 1000);
+      const earned = (hashesPerDay / 86400) * (elapsed / 1000);
       totalHashes += earned;
     }
     
@@ -525,7 +593,7 @@ app.post('/miniapi/claim', (req, res) => {
   });
 });
 
-// ── Mine ──
+// ── Mine (incremental) ──
 app.post('/miniapp/mine', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -535,11 +603,11 @@ app.post('/miniapp/mine', (req, res) => {
   let totalHashesPerDay = 0;
   
   activeContracts.forEach(c => {
-    totalHashesPerDay += c.hashes_per_day || 0;
+    totalHashesPerDay += c.hashes_per_day || calculateHashesPerDay(c.power || c.amount || 1000);
   });
   
   const hashesPerSecond = totalHashesPerDay / 86400;
-  const earned = hashesPerSecond * 60;
+  const earned = hashesPerSecond * 60; // Mine for 1 minute
   
   user.hashes = (user.hashes || 0) + earned;
   saveUser(user);
@@ -560,7 +628,7 @@ app.post('/miniapi/mine', (req, res) => {
   let totalHashesPerDay = 0;
   
   activeContracts.forEach(c => {
-    totalHashesPerDay += c.hashes_per_day || 0;
+    totalHashesPerDay += c.hashes_per_day || calculateHashesPerDay(c.power || c.amount || 1000);
   });
   
   const hashesPerSecond = totalHashesPerDay / 86400;
@@ -791,6 +859,14 @@ app.post('/miniapp/tasks/claim', (req, res) => {
   user.power = (user.power || 0) + pipsAwarded;
   user.tasks_completed.push(task_id);
   
+  // If user got new POWER, update contract hashes_per_day
+  user.contracts = user.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
+  
   saveUser(user);
   
   res.json({
@@ -850,6 +926,14 @@ app.post('/miniapi/tasks/claim', (req, res) => {
   user.power = (user.power || 0) + pipsAwarded;
   user.tasks_completed.push(task_id);
   
+  // If user got new POWER, update contract hashes_per_day
+  user.contracts = user.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
+  
   saveUser(user);
   
   res.json({
@@ -891,6 +975,13 @@ app.post('/miniapp/tasks/slot-spin', (req, res) => {
   
   if (pipsAwarded > 0) {
     user.power = (user.power || 0) + pipsAwarded;
+    // Update contract hashes_per_day
+    user.contracts = user.contracts.map(c => {
+      if (c.active) {
+        c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+      }
+      return c;
+    });
   }
   
   user.slot_next_spin_at = Date.now() + CONFIG.SLOT_COOLDOWN_MINUTES * 60 * 1000;
@@ -935,6 +1026,12 @@ app.post('/miniapi/tasks/slot-spin', (req, res) => {
   
   if (pipsAwarded > 0) {
     user.power = (user.power || 0) + pipsAwarded;
+    user.contracts = user.contracts.map(c => {
+      if (c.active) {
+        c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+      }
+      return c;
+    });
   }
   
   user.slot_next_spin_at = Date.now() + CONFIG.SLOT_COOLDOWN_MINUTES * 60 * 1000;
@@ -969,6 +1066,14 @@ app.post('/miniapp/tasks/ad-roll', (req, res) => {
   user.ad_claimed_today = true;
   user.ad_next_claim_at = Date.now() + CONFIG.AD_COOLDOWN_HOURS * 60 * 60 * 1000;
   
+  // Update contract hashes_per_day
+  user.contracts = user.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
+  
   saveUser(user);
   
   res.json({
@@ -998,6 +1103,13 @@ app.post('/miniapi/tasks/ad-roll', (req, res) => {
   user.power = (user.power || 0) + pipsAwarded;
   user.ad_claimed_today = true;
   user.ad_next_claim_at = Date.now() + CONFIG.AD_COOLDOWN_HOURS * 60 * 60 * 1000;
+  
+  user.contracts = user.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
   
   saveUser(user);
   
@@ -1030,6 +1142,13 @@ app.post('/miniapp/tasks/ad-roll2', (req, res) => {
   user.ad2_claimed_today = true;
   user.ad2_next_claim_at = Date.now() + 6 * 60 * 60 * 1000;
   
+  user.contracts = user.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
+  
   saveUser(user);
   
   res.json({
@@ -1059,6 +1178,13 @@ app.post('/miniapi/tasks/ad-roll2', (req, res) => {
   user.power = (user.power || 0) + pipsAwarded;
   user.ad2_claimed_today = true;
   user.ad2_next_claim_at = Date.now() + 6 * 60 * 60 * 1000;
+  
+  user.contracts = user.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
   
   saveUser(user);
   
@@ -1245,6 +1371,14 @@ app.post('/miniapp/referral', (req, res) => {
   referrer.power = (referrer.power || 0) + CONFIG.REF_BONUS_REGULAR;
   referrer.power_from_refs = (referrer.power_from_refs || 0) + CONFIG.REF_BONUS_REGULAR;
   
+  // Update contract hashes_per_day
+  referrer.contracts = referrer.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
+  
   saveUser(referrer);
   
   res.json({
@@ -1272,6 +1406,13 @@ app.post('/miniapi/referral', (req, res) => {
   referrer.valid_refs = (referrer.valid_refs || 0) + 1;
   referrer.power = (referrer.power || 0) + CONFIG.REF_BONUS_REGULAR;
   referrer.power_from_refs = (referrer.power_from_refs || 0) + CONFIG.REF_BONUS_REGULAR;
+  
+  referrer.contracts = referrer.contracts.map(c => {
+    if (c.active) {
+      c.hashes_per_day = calculateHashesPerDay(c.power || c.amount || 1000);
+    }
+    return c;
+  });
   
   saveUser(referrer);
   
@@ -1394,15 +1535,12 @@ app.get('/miniapi/deposit-stream', (req, res) => {
 // STATIC FILES - MUST COME LAST
 // ═══════════════════════════════════════════════════════════
 
-// Serve static files from public directory
 app.use('/miniapp', express.static(path.join(__dirname, 'public', 'miniapp')));
 
-// Redirect root
 app.get('/', (req, res) => {
   res.redirect('/miniapp');
 });
 
-// Catch-all - serve index.html for any unmatched routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'miniapp', 'index.html'));
 });
