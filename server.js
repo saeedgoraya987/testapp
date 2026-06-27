@@ -6,18 +6,21 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Middleware ──
 app.use(cors());
 app.use(express.json());
+
+// ── Logging middleware (helps debug) ──
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
 
 // ── In-memory Database ──
 const DB = {
   users: new Map(),
-  contracts: new Map(),
   deposits: new Map(),
-  tasks: [],
-  leaderboard: [],
-  depositId: 0,
-  userSessions: new Map()
+  depositId: 0
 };
 
 // ── Configuration ──
@@ -31,7 +34,6 @@ const CONFIG = {
   REF_BONUS_REGULAR: 2000,
   REF_BONUS_PREMIUM: 4000,
   WD_MIN_REFERRALS: 3,
-  AD_WAIT_SECS: 10,
   SLOT_COOLDOWN_MINUTES: 15,
   AD_COOLDOWN_HOURS: 24
 };
@@ -39,10 +41,6 @@ const CONFIG = {
 // ── Helper Functions ──
 function generateId() {
   return Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
-}
-
-function validateInitData(initData) {
-  return initData && initData.length > 0;
 }
 
 function getUserIdFromInitData(initData) {
@@ -104,13 +102,15 @@ function calculateHashesPerDay(power) {
   return (power / 1000) * CONFIG.DAILY_HASHES_PER_1K;
 }
 
-// ── API Routes (must come BEFORE static files) ──
+// ═══════════════════════════════════════════════════════════
+// API ROUTES - MUST COME BEFORE STATIC FILES
+// ═══════════════════════════════════════════════════════════
 
-// Auth
+// ── Auth ──
 app.post('/miniapp/auth', (req, res) => {
   const { initData } = req.body;
   
-  if (!validateInitData(initData)) {
+  if (!initData) {
     return res.json({ ok: false, error: 'Invalid initData' });
   }
 
@@ -125,7 +125,6 @@ app.post('/miniapp/auth', (req, res) => {
         user.last_name = data.user.last_name || user.last_name;
         user.username = data.user.username || user.username;
         user.photo_url = data.user.photo_url || user.photo_url;
-        user.language_code = data.user.language_code || user.language_code;
       }
     }
   } catch (e) {}
@@ -151,7 +150,57 @@ app.post('/miniapp/auth', (req, res) => {
   });
 });
 
-// Get user data
+// ── Welcome Bonus ──
+app.post('/miniapp/claim-welcome-bonus', (req, res) => {
+  console.log('[DEBUG] Welcome bonus endpoint hit!');
+  const { initData } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  if (user.welcome_bonus_claimed) {
+    return res.json({ ok: false, error: 'already claimed' });
+  }
+
+  const bonus = user.welcome_bonus_power || 1000;
+  user.power = (user.power || 0) + bonus;
+  user.welcome_bonus_claimed = true;
+  
+  saveUser(user);
+  
+  console.log(`[DEBUG] Welcome bonus claimed: ${bonus} POWER for user ${userId}`);
+  res.json({
+    ok: true,
+    bonus: bonus,
+    new_power: user.power
+  });
+});
+
+// ── Also add /miniapi version ──
+app.post('/miniapi/claim-welcome-bonus', (req, res) => {
+  console.log('[DEBUG] Welcome bonus endpoint hit (miniapi)!');
+  const { initData } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  if (user.welcome_bonus_claimed) {
+    return res.json({ ok: false, error: 'already claimed' });
+  }
+
+  const bonus = user.welcome_bonus_power || 1000;
+  user.power = (user.power || 0) + bonus;
+  user.welcome_bonus_claimed = true;
+  
+  saveUser(user);
+  
+  console.log(`[DEBUG] Welcome bonus claimed: ${bonus} POWER for user ${userId}`);
+  res.json({
+    ok: true,
+    bonus: bonus,
+    new_power: user.power
+  });
+});
+
+// ── Get User ──
 app.get('/miniapp/user/:userId', (req, res) => {
   const { userId } = req.params;
   
@@ -160,13 +209,32 @@ app.get('/miniapp/user/:userId', (req, res) => {
   }
   
   const user = getUser(userId);
-  res.json({
-    ok: true,
-    user
-  });
+  res.json({ ok: true, user });
 });
 
-// Get user contracts
+app.get('/miniapi/user/:userId', (req, res) => {
+  const { userId } = req.params;
+  
+  if (!DB.users.has(userId)) {
+    return res.status(404).json({ ok: false, error: 'User not found' });
+  }
+  
+  const user = getUser(userId);
+  res.json({ ok: true, user });
+});
+
+// ── Get Contracts ──
+app.get('/miniapp/user/contracts', (req, res) => {
+  const { userId } = req.query;
+  
+  if (!DB.users.has(userId)) {
+    return res.json({ ok: false, error: 'User not found' });
+  }
+  
+  const user = getUser(userId);
+  res.json({ ok: true, contracts: user.contracts || [] });
+});
+
 app.get('/miniapi/user/contracts', (req, res) => {
   const { userId } = req.query;
   
@@ -175,21 +243,56 @@ app.get('/miniapi/user/contracts', (req, res) => {
   }
   
   const user = getUser(userId);
-  res.json({
-    ok: true,
-    contracts: user.contracts || []
-  });
+  res.json({ ok: true, contracts: user.contracts || [] });
 });
 
-// Get TON price
+// ── TON Price ──
+app.get('/miniapp/ton-price', (req, res) => {
+  res.json({ ok: true, price: 3.0 });
+});
+
 app.get('/miniapi/ton-price', (req, res) => {
+  res.json({ ok: true, price: 3.0 });
+});
+
+// ── Start Production ──
+app.post('/miniapp/start-production', (req, res) => {
+  const { initData } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  const hasActiveContract = user.contracts.some(c => !c.permanent && !c.expired);
+  if (hasActiveContract) {
+    return res.json({ ok: false, error: 'Already mining' });
+  }
+  
+  const contract = {
+    id: generateId(),
+    power: 100,
+    hashes_per_day: calculateHashesPerDay(100),
+    amount: 100,
+    duration: 24,
+    seconds_left: 24 * 60 * 60,
+    progress: 0,
+    permanent: false,
+    active: true,
+    expired: false,
+    created_at: Date.now(),
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+  };
+  
+  user.contracts.push(contract);
+  user.power = (user.power || 0) + 100;
+  
+  saveUser(user);
+  
   res.json({
     ok: true,
-    price: 3.0
+    ends_at: contract.expiresAt,
+    total_hashes: user.hashes || 0
   });
 });
 
-// Start Production
 app.post('/miniapi/start-production', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -216,7 +319,7 @@ app.post('/miniapi/start-production', (req, res) => {
   };
   
   user.contracts.push(contract);
-  user.power += 100;
+  user.power = (user.power || 0) + 100;
   
   saveUser(user);
   
@@ -227,7 +330,38 @@ app.post('/miniapi/start-production', (req, res) => {
   });
 });
 
-// Buy Power
+// ── Buy Power ──
+app.post('/miniapp/buy-power', (req, res) => {
+  const { initData, power_amount } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  const tonCost = power_amount * CONFIG.TON_PER_POWER;
+  
+  DB.depositId++;
+  const depositId = DB.depositId;
+  const memo = `P${depositId}`;
+  
+  const deposit = {
+    id: depositId,
+    userId,
+    power: power_amount,
+    tonCost,
+    memo,
+    status: 'pending',
+    created_at: Date.now()
+  };
+  DB.deposits.set(depositId, deposit);
+  
+  res.json({
+    ok: true,
+    deposit_address: 'UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABkZGVm',
+    ton_cost: tonCost,
+    memo: memo,
+    deposit_id: depositId
+  });
+});
+
 app.post('/miniapi/buy-power', (req, res) => {
   const { initData, power_amount } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -259,7 +393,33 @@ app.post('/miniapi/buy-power', (req, res) => {
   });
 });
 
-// Poll Deposit
+// ── Poll Deposit ──
+app.get('/miniapp/poll-deposit', (req, res) => {
+  const { initData } = req.query;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  let lastDepositId = 0;
+  let lastDepositPower = 0;
+  
+  for (const [id, deposit] of DB.deposits) {
+    if (deposit.userId === userId && deposit.status === 'completed') {
+      if (id > lastDepositId) {
+        lastDepositId = id;
+        lastDepositPower = deposit.power || 0;
+        deposit.status = 'claimed';
+      }
+    }
+  }
+  
+  res.json({
+    ok: true,
+    last_deposit_id: lastDepositId,
+    last_deposit_power: lastDepositPower,
+    power: user.power
+  });
+});
+
 app.get('/miniapi/poll-deposit', (req, res) => {
   const { initData } = req.query;
   const userId = getUserIdFromInitData(initData);
@@ -286,30 +446,46 @@ app.get('/miniapi/poll-deposit', (req, res) => {
   });
 });
 
-// Claim Welcome Bonus
-app.post('/miniapi/claim-welcome-bonus', (req, res) => {
+// ── Claim ──
+app.post('/miniapp/claim', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  if (user.welcome_bonus_claimed) {
-    return res.json({ ok: false, error: 'already claimed' });
-  }
-
-  const bonus = user.welcome_bonus_power || 1000;
-  user.power += bonus;
-  user.welcome_bonus_claimed = true;
+  let totalHashes = user.hashes || 0;
   
+  user.contracts = user.contracts.map(c => {
+    if (c.permanent) return c;
+    if (c.expired) return c;
+    
+    const elapsed = Date.now() - c.created_at;
+    const maxDuration = c.duration * 60 * 60 * 1000;
+    const progress = Math.min(elapsed / maxDuration, 1);
+    c.progress = progress;
+    c.seconds_left = Math.max(0, (c.duration * 60 * 60) - (elapsed / 1000));
+    
+    if (progress >= 1) {
+      c.active = false;
+      c.expired = true;
+    }
+    
+    if (c.active) {
+      const earned = (c.hashes_per_day / 86400) * (elapsed / 1000);
+      totalHashes += earned;
+    }
+    
+    return c;
+  });
+  
+  user.hashes = totalHashes;
   saveUser(user);
   
   res.json({
     ok: true,
-    bonus: bonus,
-    new_power: user.power
+    total_hashes: totalHashes
   });
 });
 
-// Claim mined hashes
 app.post('/miniapi/claim', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -349,7 +525,32 @@ app.post('/miniapi/claim', (req, res) => {
   });
 });
 
-// Mine (incremental)
+// ── Mine ──
+app.post('/miniapp/mine', (req, res) => {
+  const { initData } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  const activeContracts = user.contracts.filter(c => c.active && !c.expired);
+  let totalHashesPerDay = 0;
+  
+  activeContracts.forEach(c => {
+    totalHashesPerDay += c.hashes_per_day || 0;
+  });
+  
+  const hashesPerSecond = totalHashesPerDay / 86400;
+  const earned = hashesPerSecond * 60;
+  
+  user.hashes = (user.hashes || 0) + earned;
+  saveUser(user);
+  
+  res.json({
+    ok: true,
+    earned: earned.toFixed(8),
+    total: user.hashes.toFixed(8)
+  });
+});
+
 app.post('/miniapi/mine', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -375,7 +576,88 @@ app.post('/miniapi/mine', (req, res) => {
   });
 });
 
-// ── TASKS ──
+// ── Tasks ──
+app.get('/miniapp/tasks', (req, res) => {
+  const { initData } = req.query;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  const tasks = [
+    {
+      id: 'invite_1',
+      type: 'referral',
+      labelEn: 'Invite 1 Friend',
+      required: 1,
+      pips: 2000,
+      eligible: user.referral_count >= 1,
+      completed: user.tasks_completed.includes('invite_1')
+    },
+    {
+      id: 'invite_3',
+      type: 'referral',
+      labelEn: 'Invite 3 Friends',
+      required: 3,
+      pips: 3000,
+      eligible: user.referral_count >= 3,
+      completed: user.tasks_completed.includes('invite_3')
+    },
+    {
+      id: 'invite_5',
+      type: 'referral',
+      labelEn: 'Invite 5 Friends',
+      required: 5,
+      pips: 5000,
+      eligible: user.referral_count >= 5,
+      completed: user.tasks_completed.includes('invite_5')
+    },
+    {
+      id: 'invite_10',
+      type: 'referral',
+      labelEn: 'Invite 10 Friends',
+      required: 10,
+      pips: 10000,
+      eligible: user.referral_count >= 10,
+      completed: user.tasks_completed.includes('invite_10')
+    },
+    {
+      id: 'channel',
+      type: 'channel',
+      labelEn: 'Join Our Channel',
+      channel_url: '@openswap_channel',
+      pips: 500,
+      eligible: true,
+      completed: user.tasks_completed.includes('channel')
+    },
+    {
+      id: 'ad_roll',
+      type: 'ad',
+      labelEn: 'Daily Roll',
+      pips: 5,
+      eligible: !user.ad_claimed_today || Date.now() > user.ad_next_claim_at,
+      completed: false,
+      ad_claimed_today: user.ad_claimed_today || false,
+      next_claim_at: user.ad_next_claim_at || 0
+    },
+    {
+      id: 'ad2_roll',
+      type: 'ad2',
+      labelEn: '6h Roll',
+      pips: 1,
+      eligible: !user.ad2_claimed_today || Date.now() > user.ad2_next_claim_at,
+      completed: false,
+      ad_claimed_today: user.ad2_claimed_today || false,
+      next_claim_at: user.ad2_next_claim_at || 0
+    }
+  ];
+  
+  res.json({
+    ok: true,
+    tasks: tasks,
+    referral_count: user.referral_count || 0,
+    slot_on_cooldown: Date.now() < user.slot_next_spin_at,
+    slot_next_spin_at: user.slot_next_spin_at || 0
+  });
+});
 
 app.get('/miniapi/tasks', (req, res) => {
   const { initData } = req.query;
@@ -459,9 +741,9 @@ app.get('/miniapi/tasks', (req, res) => {
   });
 });
 
-// Claim task
-app.post('/miniapi/tasks/claim', (req, res) => {
-  const { initData, task_id, referral_link } = req.body;
+// ── Task Claim ──
+app.post('/miniapp/tasks/claim', (req, res) => {
+  const { initData, task_id } = req.body;
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
@@ -506,7 +788,7 @@ app.post('/miniapi/tasks/claim', (req, res) => {
   }
   
   const pipsAwarded = task.pips || 0;
-  user.power += pipsAwarded;
+  user.power = (user.power || 0) + pipsAwarded;
   user.tasks_completed.push(task_id);
   
   saveUser(user);
@@ -519,7 +801,110 @@ app.post('/miniapi/tasks/claim', (req, res) => {
   });
 });
 
-// Slot spin
+app.post('/miniapi/tasks/claim', (req, res) => {
+  const { initData, task_id } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  const task = [
+    { id: 'invite_1', required: 1, pips: 2000 },
+    { id: 'invite_3', required: 3, pips: 3000 },
+    { id: 'invite_5', required: 5, pips: 5000 },
+    { id: 'invite_10', required: 10, pips: 10000 },
+    { id: 'channel', required: 0, pips: 500 },
+    { id: 'ad_roll', required: 0, pips: 5 },
+    { id: 'ad2_roll', required: 0, pips: 1 }
+  ].find(t => t.id === task_id);
+  
+  if (!task) {
+    return res.json({ ok: false, error: 'Invalid task' });
+  }
+  
+  if (user.tasks_completed.includes(task_id)) {
+    return res.json({ ok: false, error: 'already completed' });
+  }
+  
+  if (task_id.startsWith('invite_')) {
+    if (user.referral_count < task.required) {
+      return res.json({ ok: false, error: 'not enough referrals', required: task.required });
+    }
+  }
+  
+  if (task_id === 'ad_roll') {
+    if (user.ad_claimed_today && Date.now() < user.ad_next_claim_at) {
+      return res.json({ ok: false, error: 'cooldown', next_claim_at: user.ad_next_claim_at });
+    }
+    user.ad_claimed_today = true;
+    user.ad_next_claim_at = Date.now() + CONFIG.AD_COOLDOWN_HOURS * 60 * 60 * 1000;
+  }
+  
+  if (task_id === 'ad2_roll') {
+    if (user.ad2_claimed_today && Date.now() < user.ad2_next_claim_at) {
+      return res.json({ ok: false, error: 'cooldown', next_claim_at: user.ad2_next_claim_at });
+    }
+    user.ad2_claimed_today = true;
+    user.ad2_next_claim_at = Date.now() + 6 * 60 * 60 * 1000;
+  }
+  
+  const pipsAwarded = task.pips || 0;
+  user.power = (user.power || 0) + pipsAwarded;
+  user.tasks_completed.push(task_id);
+  
+  saveUser(user);
+  
+  res.json({
+    ok: true,
+    pips_awarded: pipsAwarded,
+    new_power: user.power,
+    next_claim_at: user.ad_next_claim_at || 0
+  });
+});
+
+// ── Slot Spin ──
+app.post('/miniapp/tasks/slot-spin', (req, res) => {
+  const { initData } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  if (Date.now() < user.slot_next_spin_at) {
+    return res.json({ 
+      ok: false, 
+      error: 'cooldown', 
+      next_spin_at: user.slot_next_spin_at 
+    });
+  }
+  
+  const fruits = ['🍒', '🍋', '🍊', '🍇', '🍓', '⭐'];
+  const reels = [
+    fruits[Math.floor(Math.random() * fruits.length)],
+    fruits[Math.floor(Math.random() * fruits.length)],
+    fruits[Math.floor(Math.random() * fruits.length)]
+  ];
+  
+  let pipsAwarded = 0;
+  if (reels[0] === reels[1] && reels[1] === reels[2]) {
+    if (reels[0] === '⭐') pipsAwarded = 25;
+    else pipsAwarded = 10;
+  } else if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
+    pipsAwarded = 3;
+  }
+  
+  if (pipsAwarded > 0) {
+    user.power = (user.power || 0) + pipsAwarded;
+  }
+  
+  user.slot_next_spin_at = Date.now() + CONFIG.SLOT_COOLDOWN_MINUTES * 60 * 1000;
+  saveUser(user);
+  
+  res.json({
+    ok: true,
+    reels: reels,
+    pips_awarded: pipsAwarded,
+    new_power: user.power,
+    next_spin_at: user.slot_next_spin_at
+  });
+});
+
 app.post('/miniapi/tasks/slot-spin', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -549,7 +934,7 @@ app.post('/miniapi/tasks/slot-spin', (req, res) => {
   }
   
   if (pipsAwarded > 0) {
-    user.power += pipsAwarded;
+    user.power = (user.power || 0) + pipsAwarded;
   }
   
   user.slot_next_spin_at = Date.now() + CONFIG.SLOT_COOLDOWN_MINUTES * 60 * 1000;
@@ -564,7 +949,37 @@ app.post('/miniapi/tasks/slot-spin', (req, res) => {
   });
 });
 
-// Ad roll (dice)
+// ── Ad Roll ──
+app.post('/miniapp/tasks/ad-roll', (req, res) => {
+  const { initData } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  if (user.ad_claimed_today && Date.now() < user.ad_next_claim_at) {
+    return res.json({ 
+      ok: false, 
+      error: 'cooldown', 
+      next_claim_at: user.ad_next_claim_at 
+    });
+  }
+  
+  const face = Math.floor(Math.random() * 6) + 1;
+  const pipsAwarded = face * 5;
+  user.power = (user.power || 0) + pipsAwarded;
+  user.ad_claimed_today = true;
+  user.ad_next_claim_at = Date.now() + CONFIG.AD_COOLDOWN_HOURS * 60 * 60 * 1000;
+  
+  saveUser(user);
+  
+  res.json({
+    ok: true,
+    face: face,
+    pips_awarded: pipsAwarded,
+    new_power: user.power,
+    next_claim_at: user.ad_next_claim_at
+  });
+});
+
 app.post('/miniapi/tasks/ad-roll', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -580,7 +995,7 @@ app.post('/miniapi/tasks/ad-roll', (req, res) => {
   
   const face = Math.floor(Math.random() * 6) + 1;
   const pipsAwarded = face * 5;
-  user.power += pipsAwarded;
+  user.power = (user.power || 0) + pipsAwarded;
   user.ad_claimed_today = true;
   user.ad_next_claim_at = Date.now() + CONFIG.AD_COOLDOWN_HOURS * 60 * 60 * 1000;
   
@@ -595,7 +1010,37 @@ app.post('/miniapi/tasks/ad-roll', (req, res) => {
   });
 });
 
-// Ad2 roll (6h cooldown)
+// ── Ad2 Roll ──
+app.post('/miniapp/tasks/ad-roll2', (req, res) => {
+  const { initData } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  if (user.ad2_claimed_today && Date.now() < user.ad2_next_claim_at) {
+    return res.json({ 
+      ok: false, 
+      error: 'cooldown', 
+      next_claim_at: user.ad2_next_claim_at 
+    });
+  }
+  
+  const face = Math.floor(Math.random() * 6) + 1;
+  const pipsAwarded = face * 2;
+  user.power = (user.power || 0) + pipsAwarded;
+  user.ad2_claimed_today = true;
+  user.ad2_next_claim_at = Date.now() + 6 * 60 * 60 * 1000;
+  
+  saveUser(user);
+  
+  res.json({
+    ok: true,
+    face: face,
+    pips_awarded: pipsAwarded,
+    new_power: user.power,
+    next_claim_at: user.ad2_next_claim_at
+  });
+});
+
 app.post('/miniapi/tasks/ad-roll2', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
@@ -611,7 +1056,7 @@ app.post('/miniapi/tasks/ad-roll2', (req, res) => {
   
   const face = Math.floor(Math.random() * 6) + 1;
   const pipsAwarded = face * 2;
-  user.power += pipsAwarded;
+  user.power = (user.power || 0) + pipsAwarded;
   user.ad2_claimed_today = true;
   user.ad2_next_claim_at = Date.now() + 6 * 60 * 60 * 1000;
   
@@ -626,7 +1071,39 @@ app.post('/miniapi/tasks/ad-roll2', (req, res) => {
   });
 });
 
-// ── LEADERBOARD ──
+// ── Leaderboard ──
+app.get('/miniapp/leaderboard', (req, res) => {
+  const { limit = 25, offset = 0, initData } = req.query;
+  
+  const allUsers = Array.from(DB.users.values())
+    .filter(u => u.power > 0)
+    .sort((a, b) => (b.power || 0) - (a.power || 0));
+  
+  const total = allUsers.length;
+  const entries = allUsers.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+  
+  let userRank = null;
+  if (initData) {
+    const userId = getUserIdFromInitData(initData);
+    const rank = allUsers.findIndex(u => u.id === userId) + 1;
+    if (rank > 0) userRank = rank;
+  }
+  
+  res.json({
+    ok: true,
+    entries: entries.map((u, idx) => ({
+      id: u.id,
+      first_name: u.first_name || 'User',
+      last_name: u.last_name || '',
+      username: u.username || '',
+      photo_url: u.photo_url || '',
+      power: u.power || 0,
+      rank: parseInt(offset) + idx + 1
+    })),
+    total: total,
+    user_rank: userRank
+  });
+});
 
 app.get('/miniapi/leaderboard', (req, res) => {
   const { limit = 25, offset = 0, initData } = req.query;
@@ -661,7 +1138,49 @@ app.get('/miniapi/leaderboard', (req, res) => {
   });
 });
 
-// ── TEAM ──
+// ── Team ──
+app.post('/miniapp/team', (req, res) => {
+  const { initData, page = 1, tab = 'members' } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  if (tab === 'members') {
+    const members = user.referrals || [];
+    const pageSize = 10;
+    const totalPages = Math.ceil(members.length / pageSize) || 1;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    
+    const paginatedMembers = members.slice(start, end).map(id => {
+      const refUser = DB.users.get(id) || { 
+        first_name: 'Unknown', 
+        username: '', 
+        photo_url: '',
+        power: 0
+      };
+      return {
+        ...refUser,
+        pending_referral_rewards: false,
+        is_premium: false,
+        power: refUser.power || 0
+      };
+    });
+    
+    res.json({
+      ok: true,
+      members: paginatedMembers,
+      pages: totalPages,
+      current_page: page
+    });
+  } else {
+    res.json({
+      ok: true,
+      log: [],
+      pages: 1,
+      current_page: page
+    });
+  }
+});
 
 app.post('/miniapi/team', (req, res) => {
   const { initData, page = 1, tab = 'members' } = req.body;
@@ -706,7 +1225,35 @@ app.post('/miniapi/team', (req, res) => {
   }
 });
 
-// Add referral
+// ── Referral ──
+app.post('/miniapp/referral', (req, res) => {
+  const { initData, referrerId, newUserId } = req.body;
+  
+  if (!DB.users.has(referrerId) || !DB.users.has(newUserId)) {
+    return res.json({ ok: false, error: 'User not found' });
+  }
+  
+  const referrer = getUser(referrerId);
+  
+  if (referrer.referrals.includes(newUserId)) {
+    return res.json({ ok: false, error: 'Already referred' });
+  }
+  
+  referrer.referrals.push(newUserId);
+  referrer.referral_count = (referrer.referral_count || 0) + 1;
+  referrer.valid_refs = (referrer.valid_refs || 0) + 1;
+  referrer.power = (referrer.power || 0) + CONFIG.REF_BONUS_REGULAR;
+  referrer.power_from_refs = (referrer.power_from_refs || 0) + CONFIG.REF_BONUS_REGULAR;
+  
+  saveUser(referrer);
+  
+  res.json({
+    ok: true,
+    bonus: CONFIG.REF_BONUS_REGULAR,
+    totalPower: referrer.power
+  });
+});
+
 app.post('/miniapi/referral', (req, res) => {
   const { initData, referrerId, newUserId } = req.body;
   
@@ -723,7 +1270,7 @@ app.post('/miniapi/referral', (req, res) => {
   referrer.referrals.push(newUserId);
   referrer.referral_count = (referrer.referral_count || 0) + 1;
   referrer.valid_refs = (referrer.valid_refs || 0) + 1;
-  referrer.power += CONFIG.REF_BONUS_REGULAR;
+  referrer.power = (referrer.power || 0) + CONFIG.REF_BONUS_REGULAR;
   referrer.power_from_refs = (referrer.power_from_refs || 0) + CONFIG.REF_BONUS_REGULAR;
   
   saveUser(referrer);
@@ -735,7 +1282,38 @@ app.post('/miniapi/referral', (req, res) => {
   });
 });
 
-// ── WITHDRAW ──
+// ── Withdraw ──
+app.post('/miniapp/withdraw', (req, res) => {
+  const { initData, wallet_address, memo } = req.body;
+  const userId = getUserIdFromInitData(initData);
+  const user = getUser(userId);
+  
+  if (!user.hashes || user.hashes < CONFIG.WD_MIN_HASHES) {
+    return res.json({ 
+      ok: false, 
+      error: `minimum_not_met:${(CONFIG.WD_MIN_HASHES * CONFIG.HASH_TO_TON).toFixed(8)}:${CONFIG.WD_MIN_HASHES}` 
+    });
+  }
+  
+  if ((user.referral_count || 0) < CONFIG.WD_MIN_REFERRALS) {
+    return res.json({ 
+      ok: false, 
+      error: `referral_requirement:${CONFIG.WD_MIN_REFERRALS}` 
+    });
+  }
+  
+  const tonAmount = user.hashes * CONFIG.HASH_TO_TON;
+  user.hashes = 0;
+  user.balance = (user.balance || 0) + tonAmount;
+  
+  saveUser(user);
+  
+  res.json({
+    ok: true,
+    ton_amount: tonAmount,
+    message: 'Swap completed successfully'
+  });
+});
 
 app.post('/miniapi/withdraw', (req, res) => {
   const { initData, wallet_address, memo } = req.body;
@@ -769,11 +1347,9 @@ app.post('/miniapi/withdraw', (req, res) => {
   });
 });
 
-// ── DEPOSIT STREAM (SSE) ──
-
-app.get('/miniapi/deposit-stream', (req, res) => {
+// ── Deposit Stream ──
+app.get('/miniapp/deposit-stream', (req, res) => {
   const { initData } = req.query;
-  const userId = getUserIdFromInitData(initData);
   
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -788,47 +1364,52 @@ app.get('/miniapi/deposit-stream', (req, res) => {
     res.write('event: ping\ndata: {}\n\n');
   }, 30000);
   
-  let checkInterval = setInterval(() => {
-    for (const [id, deposit] of DB.deposits) {
-      if (deposit.userId === userId && deposit.status === 'pending') {
-        if (Math.random() < 0.1) {
-          deposit.status = 'completed';
-          const user = getUser(userId);
-          user.power += deposit.power;
-          saveUser(user);
-          
-          res.write(`event: deposit\ndata: ${JSON.stringify({
-            power: deposit.power,
-            newPower: user.power,
-            depositId: id
-          })}\n\n`);
-        }
-      }
-    }
-  }, 5000);
-  
   req.on('close', () => {
     clearInterval(pingInterval);
-    clearInterval(checkInterval);
   });
 });
 
-// ── STATIC FILES (must come AFTER API routes) ──
+app.get('/miniapi/deposit-stream', (req, res) => {
+  const { initData } = req.query;
+  
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+  
+  res.write('retry: 10000\n\n');
+  res.write('event: connected\ndata: {"status":"ok"}\n\n');
+  
+  const pingInterval = setInterval(() => {
+    res.write('event: ping\ndata: {}\n\n');
+  }, 30000);
+  
+  req.on('close', () => {
+    clearInterval(pingInterval);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// STATIC FILES - MUST COME LAST
+// ═══════════════════════════════════════════════════════════
 
 // Serve static files from public directory
 app.use('/miniapp', express.static(path.join(__dirname, 'public', 'miniapp')));
 
-// Redirect root to /miniapp
+// Redirect root
 app.get('/', (req, res) => {
   res.redirect('/miniapp');
 });
 
-// Catch-all for any other routes - serve the index.html
+// Catch-all - serve index.html for any unmatched routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'miniapp', 'index.html'));
 });
 
-// ── Initialize with test data ──
+// ═══════════════════════════════════════════════════════════
+// INITIALIZE TEST DATA
+// ═══════════════════════════════════════════════════════════
 
 function initTestData() {
   const names = ['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack'];
@@ -901,10 +1482,10 @@ function initTestData() {
 initTestData();
 
 // ── Start Server ──
-
-app.listen(PORT, () => {
-  console.log(`\n🚀 Open Swap Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🚀 Open Swap Server running on port ${PORT}`);
   console.log(`📊 Users: ${DB.users.size}`);
   console.log(`📁 Serving from: ${path.join(__dirname, 'public', 'miniapp')}`);
   console.log(`\n🔗 Open in browser: http://localhost:${PORT}/miniapp\n`);
+  console.log(`📡 API endpoints available at /miniapp/* and /miniapi/*`);
 });
