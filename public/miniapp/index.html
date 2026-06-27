@@ -1,0 +1,919 @@
+
+<!--
+  ⚠️ I18N: DO NOT hardcode user-facing text in this file.
+  Use data-i18n="key" for text content, data-i18n-html="key" for innerHTML,
+  and data-i18n-placeholder="key" for input placeholders.
+  All strings live in /miniapp/locales/*.json — See I18N.md for details.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#060606">
+  <title>Open Swap</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src='//libtl.com/sdk.js' data-zone='11160788' data-sdk='show_11160788'></script>
+  <script src="/miniapp/auto-ads.js"></script>
+  <!-- Richads SDK deprecated and removed -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════ LOADING ═══════════════════════════ -->
+<div id="loading-screen">
+  <div class="ls-inner" style="display: flex; align-items: center; justify-content: center; height: 100vh;">
+    <div class="mn-ring" style="transform: scale(0.9);">
+      <div class="mn-ring-spin"></div>
+      <div class="mn-ring-track"></div>
+      <div class="mn-ring-core">
+        <img class="mn-ring-photo" src="/miniapp/bot-photo" alt="" onerror="this.style.display='none'">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ APP ═══════════════════════════════ -->
+<div id="app">
+
+  <!-- HEADER -->
+  <!-- JS hooks for user info (hidden, referenced by app.js) -->
+  <div style="display:none" id="header-user">
+    <img id="header-user-photo" src="" alt="">
+    <div id="header-user-initials"></div>
+    <span id="header-user-name"></span>
+  </div>
+  <!-- Floating lang selector — no header bar -->
+  <div class="float-lang" id="lang-selector">
+    <button class="lang-selector-btn" id="lang-selector-btn" aria-haspopup="listbox" aria-expanded="false">
+      <span id="lang-selector-current">🌐</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <ul class="lang-dropdown" id="lang-dropdown" role="listbox" style="display:none"></ul>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="nav">
+    <button class="nav-item active" data-tab="mine">
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4.5 13.5H11L10 22l9.5-12H14L13 2z"/></svg>
+      </span>
+      <span class="nav-label">Home</span>
+    </button>
+    <button class="nav-item" data-tab="shop">
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1 5a1 1 0 1 0-2 0v4H7a1 1 0 1 0 0 2h4v4a1 1 0 1 0 2 0v-4h4a1 1 0 1 0 0-2h-4V7z" clip-rule="evenodd"/></svg>
+      </span>
+      <span class="nav-label" data-i18n="tab_shop">Shop</span>
+    </button>
+    <button class="nav-item" data-tab="leaderboard">
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11 18v-2.084A6.004 6.004 0 0 1 6.343 9H5a3 3 0 0 1 0-6h.17A3.001 3.001 0 0 1 8 1h8a3.001 3.001 0 0 1 2.83 2H19a3 3 0 0 1 0 6h-1.343A6.004 6.004 0 0 1 13 15.916V18h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2zM5 5H4a1 1 0 0 0 0 2h1V5zm15 0h-1v2h1a1 1 0 1 0 0-2z"/></svg>
+      </span>
+      <span class="nav-label">Trophy</span>
+    </button>
+    <button class="nav-item" data-tab="team">
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm-8 0c1.657 0 3-1.343 3-3S9.657 5 8 5 5 6.343 5 8s1.343 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05C16.19 13.85 17 14.77 17 16.5V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      </span>
+      <span class="nav-label">Team</span>
+    </button>
+    <button class="nav-item" data-tab="tasks">
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>
+      </span>
+      <span class="nav-label">More</span>
+    </button>
+  </nav>
+
+  <!-- ══════════════════ PAGE: MINE ══════════════════ -->
+  <main id="page-mine" class="page mn-page active">
+
+    <!-- MINING RING -->
+    <section class="mn-ring-section">
+      <div class="mn-ring" id="mine-ring">
+        <div class="mn-ring-spin"></div>
+        <div class="mn-ring-track"></div>
+        <div class="mn-ring-core">
+          <img class="mn-ring-photo" src="/miniapp/bot-photo" alt="" onerror="this.style.display='none'">
+        </div>
+      </div>
+    </section>
+
+    <!-- HASHES BALANCE -->
+    <section class="mn-hashes">
+      <div class="mn-hashes-value" id="mine-hashes">0.00000000</div>
+      <div class="mn-hashes-label" data-i18n="hashes_mined">HASHES mined</div>
+      <div class="mn-hashes-ton" id="mine-ton">≈ 0.00000000 TON <span data-i18n="at_current_rate">at current rate</span></div>
+    </section>
+
+    <!-- STATS STRIP -->
+    <div class="mn-stats">
+      <div class="mn-stat">
+        <div class="mn-stat-val"><strong id="mine-rate-day">0</strong> <span data-i18n="h_per_day_unit">H/day</span></div>
+        <div class="mn-stat-lbl" data-i18n="rate_label">Rate</div>
+      </div>
+      <div class="mn-stat-div"></div>
+      <div class="mn-stat">
+        <div class="mn-stat-val"><strong id="mine-power">0</strong></div>
+        <div class="mn-stat-lbl" data-i18n="power_unit">POWER</div>
+      </div>
+      <div class="mn-stat-div"></div>
+      <div class="mn-stat">
+        <div class="mn-stat-val"><strong id="mine-next-expiry">—</strong></div>
+        <div class="mn-stat-lbl" data-i18n="next_expiry">Next expiry</div>
+      </div>
+    </div>
+
+    <!-- YOUR CONTRACTS -->
+    <div class="mn-section-title" data-i18n="your_contracts">YOUR CONTRACTS</div>
+    <div id="mine-contracts" class="mn-contracts"></div>
+
+    <!-- SWAP BANNER -->
+    <button class="mn-swap-banner" id="claim-btn">
+      <div class="mn-swap-icon"><i data-lucide="refresh-cw"></i></div>
+      <div class="mn-swap-text">
+        <div class="mn-swap-title" data-i18n="swap_hashes_to_ton">SWAP HASHES → TON</div>
+        <div class="mn-swap-sub" id="mine-swap-sub" data-i18n="swap_convert_all">Convert all your HASHES to TON</div>
+      </div>
+      <i data-lucide="chevron-right" class="mn-swap-arrow"></i>
+    </button>
+
+    <!-- PRODUCTION BUTTON (legacy; hidden once mining is active) -->
+    <button class="btn-produce" id="start-production-btn" style="display:none">
+      <i data-lucide="play"></i>
+      <span id="start-production-text" data-i18n="start_hashes_production">START PRODUCTION</span>
+    </button>
+
+    <!-- QUICK ACTIONS -->
+    <div class="mn-actions">
+      <button class="mn-action" id="mine-add-power-btn">
+        <i data-lucide="zap"></i>
+        <span data-i18n="buy_power_btn">Buy POWER</span>
+      </button>
+      <button class="mn-action mn-action--ghost" id="mine-free-power-btn">
+        <i data-lucide="gift"></i>
+        <span data-i18n="free_power">Free POWER</span>
+      </button>
+    </div>
+
+  </main>
+
+  <!-- ══════════════════ PAGE: SHOP ══════════════════ -->
+  <main id="page-shop" class="page sh-page">
+
+    <!-- HERO -->
+    <div class="sh-hero">
+      <div class="sh-hero-text">
+        <h1 class="sh-hero-title" data-i18n="tab_shop">Shop</h1>
+        <p class="sh-hero-sub" data-i18n="shop_hero_sub">Buy POWER and grow faster.</p>
+      </div>
+      <div class="sh-hero-art" aria-hidden="true">
+        <div class="sh-hero-art-glow"></div>
+        <i data-lucide="shopping-cart"></i>
+      </div>
+    </div>
+
+    <!-- TAB -->
+    <div class="sh-tabbar">
+      <button class="sh-tab active"><i data-lucide="zap"></i><span data-i18n="buy_power_tab">Buy Power</span></button>
+    </div>
+
+
+
+    <!-- PACKAGES -->
+    <div class="sh-list" id="shop-packages">
+      <!-- filled by JS renderShop() -->
+    </div>
+
+    <!-- FOOTER NOTE -->
+    <div class="sh-footer">
+      <div class="sh-footer-left">
+        <i data-lucide="lock"></i>
+        <span data-i18n="shop_secure_note">Secure payments on TON blockchain.</span>
+      </div>
+      <div class="sh-footer-right">
+        <svg width="16" height="16" viewBox="0 0 56 56" fill="none"><path d="M28 56C43.464 56 56 43.464 56 28C56 12.536 43.464 0 28 0C12.536 0 0 12.536 0 28C0 43.464 12.536 56 28 56Z" fill="#0098EA"/><path d="M37.56 15.63H18.44c-3.52 0-5.74 3.79-3.98 6.86l11.8 20.45c.77 1.34 2.71 1.34 3.47 0l11.8-20.45c1.77-3.07-.45-6.86-3.97-6.86zM26.25 36.38l-2.52-4.46-5.74-9.88c-.44-.74.08-1.7.94-1.7h7.32v16.04zm11.77-14.34l-5.74 9.88-2.52 4.46V20.34h7.32c.86 0 1.38.96.94 1.7z" fill="white"/></svg>
+        <span data-i18n="shop_secured_by_ton">Secured by TON</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ══════════════════ PAGE: LEADERBOARD ══════════════════ -->
+  <main id="page-leaderboard" class="page lb-page">
+
+    <!-- HERO -->
+    <div class="lb-hero">
+      <div class="lb-hero-text">
+        <div class="lb-hero-eyebrow"><span class="lb-hero-icon"><i data-lucide="trophy"></i></span></div>
+        <h1 class="lb-hero-title" data-i18n="tab_rank">Trophy</h1>
+        <p class="lb-hero-sub" data-i18n="lb_hero_sub">Top users with the most Power. Climb the leaderboard!</p>
+
+      </div>
+      <div class="lb-hero-art" aria-hidden="true">
+        <div class="lb-hero-art-glow"></div>
+        <i data-lucide="trophy"></i>
+      </div>
+    </div>
+
+    <!-- PODIUM TOP 3 -->
+    <div class="lb-podium" id="lb-podium">
+      <!-- filled by JS -->
+    </div>
+
+    <!-- USER RANK BADGE -->
+    <div class="lb-user-rank" id="lb-user-rank" style="display:none">
+      <span class="lb-user-rank-label" data-i18n="lb_your_rank">Your rank</span>
+      <span class="lb-user-rank-val" id="lb-user-rank-val">#—</span>
+      <span class="lb-user-rank-total" id="lb-user-rank-total" style="display:none"></span>
+    </div>
+
+    <!-- REST OF THE LIST (rank 4+) -->
+    <div class="lb-rest" id="lb-rest">
+      <div class="lb-loading" data-i18n="loading">Loading…</div>
+    </div>
+
+    <!-- PAGINATION -->
+    <div class="lb-pagination" id="lb-pagination" style="display:none">
+      <button class="lb-page-btn" id="lb-prev-btn" disabled>‹</button>
+      <span class="lb-page-info" id="lb-page-info"></span>
+      <button class="lb-page-btn" id="lb-next-btn">›</button>
+    </div>
+
+    <!-- PROMO BANNER -->
+    <button class="lb-promo" id="lb-promo-btn">
+      <div class="lb-promo-art"><i data-lucide="zap"></i></div>
+      <div class="lb-promo-text">
+        <div class="lb-promo-title" data-i18n="lb_promo_title">Keep earning Power!</div>
+        <div class="lb-promo-sub" data-i18n="lb_promo_sub">Complete tasks, invite friends and increase your rank.</div>
+      </div>
+      <i data-lucide="chevron-right" class="lb-promo-arrow"></i>
+    </button>
+
+  </main>
+
+  <!-- ══════════════════ PAGE: TEAM ══════════════════ -->
+  <main id="page-team" class="page tn-page">
+
+    <!-- HERO -->
+    <div class="tn-hero">
+      <div class="tn-hero-left">
+        <div class="tn-hero-tag"><i data-lucide="users"></i></div>
+        <h2 class="tn-hero-title" data-i18n="tab_team">Team</h2>
+        <p class="tn-hero-sub" data-i18n="team_hero_sub">Grow your network, earn more.</p>
+      </div>
+      <div class="tn-hero-art" aria-hidden="true">
+        <div class="tn-hero-art-glow"></div>
+        <i data-lucide="users-round"></i>
+      </div>
+    </div>
+
+    <!-- REWARD ROWS -->
+    <div class="tn-rewards">
+      <div class="tn-reward-row">
+        <div class="tn-reward-icon tn-reward-icon--ref"><i data-lucide="gift"></i></div>
+        <div class="tn-reward-info">
+          <div class="tn-reward-name" data-i18n="per_referral">Referral Bonus</div>
+          <div class="tn-reward-desc" data-i18n="for_each_referred">For each referred user</div>
+        </div>
+        <div class="tn-reward-val">
+          <span class="tn-reward-num tn-reward-num--g" id="team-ref-bonus">+2,000</span>
+          <span class="tn-reward-unit" data-i18n="power_unit">POWER</span>
+        </div>
+      </div>
+      <div class="tn-reward-row">
+        <div class="tn-reward-icon tn-reward-icon--prem"><i data-lucide="gem"></i></div>
+        <div class="tn-reward-info">
+          <div class="tn-reward-name" data-i18n="premium_user">Premium Bonus</div>
+          <div class="tn-reward-desc" data-i18n="for_each_premium">For each premium user</div>
+        </div>
+        <div class="tn-reward-val">
+          <span class="tn-reward-num tn-reward-num--o" id="team-prem-bonus">+4,000</span>
+          <span class="tn-reward-unit" data-i18n="power_unit">POWER</span>
+        </div>
+      </div>
+      <div class="tn-reward-row tn-reward-row--last">
+        <div class="tn-reward-icon tn-reward-icon--comm"><i data-lucide="percent"></i></div>
+        <div class="tn-reward-info">
+          <div class="tn-reward-name" data-i18n="commission_label">Commission</div>
+          <div class="tn-reward-desc" data-i18n="on_purchases">On purchases</div>
+        </div>
+        <div class="tn-reward-val">
+          <span class="tn-reward-num" id="team-comm-bonus">10%</span>
+          <span class="tn-reward-unit">COMM</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS GRID with icons -->
+    <div class="tn-stats">
+      <div class="tn-stat-row">
+        <div class="tn-stat-cell">
+          <div class="tn-stat-icon tn-stat-icon--g"><i data-lucide="user"></i></div>
+          <div class="tn-stat-body">
+            <div class="tn-stat-num" id="team-total-refs">0</div>
+            <div class="tn-stat-lbl" data-i18n="referred">Referred</div>
+          </div>
+        </div>
+        <div class="tn-stat-cell">
+          <div class="tn-stat-icon tn-stat-icon--g"><i data-lucide="shield-check"></i></div>
+          <div class="tn-stat-body">
+            <div class="tn-stat-num tn-stat-num--g" id="team-valid-refs">0</div>
+            <div class="tn-stat-lbl" data-i18n="valid">Valid</div>
+          </div>
+        </div>
+      </div>
+      <div class="tn-stat-row">
+        <div class="tn-stat-cell">
+          <div class="tn-stat-icon tn-stat-icon--o"><i data-lucide="clock"></i></div>
+          <div class="tn-stat-body">
+            <div class="tn-stat-num tn-stat-num--o" id="team-invalid-refs">0</div>
+            <div class="tn-stat-lbl" data-i18n="pending">Pending</div>
+          </div>
+        </div>
+        <div class="tn-stat-cell">
+          <div class="tn-stat-icon tn-stat-icon--g"><i data-lucide="zap"></i></div>
+          <div class="tn-stat-body">
+            <div class="tn-stat-num tn-stat-num--g" id="team-power-earned">0.00</div>
+            <div class="tn-stat-lbl" data-i18n="power_unit">Power</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="tn-actions">
+      <button class="tn-btn-share" id="team-share-btn">
+        <i data-lucide="send"></i>
+        <span data-i18n="share_link">Get Referrals</span>
+      </button>
+      <button class="tn-btn-copy" id="copy-ref-btn">
+        <i data-lucide="copy"></i>
+        <span data-i18n="copy_link">Copy Link</span>
+      </button>
+    </div>
+
+    <!-- MEMBERS CARD -->
+    <div class="tn-members-card">
+      <div class="tn-tabs-bar">
+        <button class="team-tab active" data-team-tab="members">
+          <span data-i18n="members">Members</span>
+        </button>
+        <button class="team-tab" data-team-tab="log">
+          <span data-i18n="power_log">Power Log</span>
+        </button>
+      </div>
+      <div class="team-tab-panel active" id="team-panel-members">
+        <div class="team-list" id="team-members-list">
+          <div class="tn-empty">
+            <div class="tn-empty-icon"><i data-lucide="package-open"></i></div>
+            <div class="tn-empty-title" data-i18n="no_referrals_title">No referrals yet</div>
+            <div class="tn-empty-sub" data-i18n="no_referrals_sub">Share your link and start building your team!</div>
+          </div>
+        </div>
+        <div class="team-pagination" id="team-members-pager"></div>
+      </div>
+      <div class="team-tab-panel" id="team-panel-log">
+        <div class="team-list" id="team-log-list">
+          <div class="tn-empty">
+            <div class="tn-empty-icon"><i data-lucide="zap"></i></div>
+            <div class="tn-empty-title" data-i18n="no_power_title">No POWER earned yet</div>
+            <div class="tn-empty-sub" data-i18n="no_power_sub">Invite friends to start earning!</div>
+          </div>
+        </div>
+        <div class="team-pagination" id="team-log-pager"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ══════════════════ PAGE: TASKS ══════════════════ -->
+  <main id="page-tasks" class="page tk-page">
+
+    <!-- HERO -->
+    <div class="tk-hero">
+      <div class="tk-hero-text">
+        <div class="tk-hero-eyebrow">
+          <span class="tk-hero-icon"><i data-lucide="list-checks"></i></span>
+        </div>
+        <h1 class="tk-hero-title" data-i18n="tasks_title">Tasks</h1>
+        <p class="tk-hero-sub" data-i18n="tasks_subtitle_plain">Complete tasks and earn Power.</p>
+      </div>
+      <div class="tk-hero-art" aria-hidden="true">
+        <div class="tk-hero-art-glow"></div>
+        <i data-lucide="clipboard-check"></i>
+      </div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="tk-stats">
+      <div class="tk-stat">
+        <div class="tk-stat-icon tk-stat-icon--earned"><i data-lucide="zap"></i></div>
+        <div class="tk-stat-body">
+          <div class="tk-stat-label" data-i18n="total_earned">Total Earned</div>
+          <div class="tk-stat-row">
+            <span class="tk-stat-num tk-stat-num--earned" id="tk-stat-earned">0.00</span>
+            <span class="tk-stat-unit" data-i18n="power_unit">POWER</span>
+          </div>
+        </div>
+      </div>
+      <div class="tk-stat-div"></div>
+      <div class="tk-stat">
+        <div class="tk-stat-icon tk-stat-icon--avail"><i data-lucide="gift"></i></div>
+        <div class="tk-stat-body">
+          <div class="tk-stat-label" data-i18n="available_label">Available</div>
+          <div class="tk-stat-row">
+            <span class="tk-stat-num tk-stat-num--avail" id="tk-stat-available">0.00</span>
+            <span class="tk-stat-unit" data-i18n="power_unit">POWER</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DAILY / OTHER TASKS SECTION (shown first) -->
+    <div class="tk-section" id="tk-daily-section" style="display:none">
+      <div class="tk-section-head">
+        <div class="tk-section-text">
+          <h2 class="tk-section-title" data-i18n="daily_tasks_title">Daily Tasks</h2>
+          <p class="tk-section-sub" data-i18n="daily_tasks_sub">Quick wins, refreshed regularly.</p>
+        </div>
+      </div>
+      <div id="tasks-daily-list"></div>
+    </div>
+
+    <!-- INVITE FRIENDS SECTION HEADER -->
+    <div class="tk-section" id="tk-invite-section" style="display:none">
+      <div class="tk-section-head">
+        <div class="tk-section-text">
+          <h2 class="tk-section-title" data-i18n="invite_friends_title">Invite Friends</h2>
+          <p class="tk-section-sub" data-i18n="invite_friends_sub">Earn Power by inviting your friends.</p>
+        </div>
+        <div class="tk-section-badge">
+          <span id="tk-invite-done">0</span> / <span id="tk-invite-total">0</span>
+          <span data-i18n="completed_word">Completed</span>
+        </div>
+      </div>
+      <div id="tasks-invite-list"></div>
+
+      <!-- PROMO BANNER -->
+      <div class="tk-promo">
+        <div class="tk-promo-art" aria-hidden="true"><i data-lucide="gift"></i></div>
+        <div class="tk-promo-text">
+          <div class="tk-promo-title" data-i18n="promo_title">The more you invite, the more you earn!</div>
+          <div class="tk-promo-sub" data-i18n="promo_sub">Keep growing your network and unlock even greater rewards.</div>
+        </div>
+        <div class="tk-promo-chevron"><i data-lucide="chevron-right"></i></div>
+      </div>
+    </div>
+
+    <!-- generic / fallback list (kept for compatibility) -->
+    <div id="tasks-list"></div>
+
+  </main>
+
+</div><!-- /app -->
+
+<!-- ══════════════════ DICE MODAL (step 2) ══════════════════ -->
+<div class="modal-overlay dice-overlay" id="dice-modal" style="display:none">
+  <div class="dice-sheet">
+    <div class="dice-header">
+      <div class="dice-title" data-i18n="dice_modal_title">Roll for POWER</div>
+      <button class="dice-close" id="dice-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="dice-sub" data-i18n="dice_modal_sub">Watch a quick ad, then roll the dice!</div>
+    <div class="dice-prize-grid">
+      <div class="dice-prize-item"><div class="face"><span>⚀</span> 1</div><div class="reward">5 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚁</span> 2</div><div class="reward">10 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚂</span> 3</div><div class="reward">15 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚃</span> 4</div><div class="reward">20 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚄</span> 5</div><div class="reward">30 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚅</span> 6</div><div class="reward">50 POWER</div></div>
+    </div>
+    <div class="dice-wrap" id="dice-wrap">
+      <div class="dice" id="dice">
+        <div class="dice-face face-1"><span></span></div>
+        <div class="dice-face face-2"><span></span><span></span></div>
+        <div class="dice-face face-3"><span></span><span></span><span></span></div>
+        <div class="dice-face face-4"><span></span><span></span><span></span><span></span></div>
+        <div class="dice-face face-5"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="dice-face face-6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+    </div>
+    <div class="dice-result-text" id="dice-result-text"></div>
+    <div class="dice-reward-text" id="dice-reward-text"></div>
+    <button class="dice-roll-btn" id="dice-roll-btn" data-i18n="dice_roll_btn">Roll!</button>
+  </div>
+</div>
+
+<!-- ══════════════════ DICE2 MODAL (6h cooldown) ══════════════════ -->
+<div class="modal-overlay dice-overlay dice2-overlay" id="dice2-modal" style="display:none">
+  <div class="dice-sheet">
+    <div class="dice-header">
+      <div class="dice-title" data-i18n="dice2_modal_title">Roll for POWER</div>
+      <button class="dice-close" id="dice2-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="dice-sub" data-i18n="dice2_modal_sub">Watch a quick ad, then roll the dice!</div>
+    <div class="dice-prize-grid">
+      <div class="dice-prize-item"><div class="face"><span>⚀</span> 1</div><div class="reward">1 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚁</span> 2</div><div class="reward">2 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚂</span> 3</div><div class="reward">3 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚃</span> 4</div><div class="reward">5 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚄</span> 5</div><div class="reward">7 POWER</div></div>
+      <div class="dice-prize-item"><div class="face"><span>⚅</span> 6</div><div class="reward">12 POWER</div></div>
+    </div>
+    <div class="dice-wrap" id="dice2-wrap">
+      <div class="dice" id="dice2">
+        <div class="dice-face face-1"><span></span></div>
+        <div class="dice-face face-2"><span></span><span></span></div>
+        <div class="dice-face face-3"><span></span><span></span><span></span></div>
+        <div class="dice-face face-4"><span></span><span></span><span></span><span></span></div>
+        <div class="dice-face face-5"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="dice-face face-6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+    </div>
+    <div class="dice-result-text" id="dice2-result-text"></div>
+    <div class="dice-reward-text" id="dice2-reward-text"></div>
+    <button class="dice-roll-btn dice2-roll-btn" id="dice2-roll-btn" data-i18n="dice_roll_btn">Roll!</button>
+  </div>
+</div>
+
+<!-- ══════════════════ SLOT — PLAY MODAL ══════════════════ -->
+<div class="slot-overlay" id="slot-modal" style="display:none">
+  <div class="slot-sheet">
+    <div class="slot-header">
+      <div class="slot-title" data-i18n="slot_modal_title">Fruit Slots</div>
+      <button class="slot-close" id="slot-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="slot-sub" data-i18n="slot_modal_sub">Spin every 15 min · Win POWER!</div>
+
+    <!-- Prize table -->
+    <div class="slot-prize-grid">
+      <div class="slot-prize-item slot-prize--star">
+        <div class="slot-prize-symbols">⭐⭐⭐</div>
+        <div class="slot-prize-reward">25 POWER</div>
+      </div>
+      <div class="slot-prize-item">
+        <div class="slot-prize-symbols">🍒🍒🍒</div>
+        <div class="slot-prize-reward">10 POWER</div>
+      </div>
+      <div class="slot-prize-item">
+        <div class="slot-prize-symbols">🍋🍋🍋</div>
+        <div class="slot-prize-reward">10 POWER</div>
+      </div>
+      <div class="slot-prize-item">
+        <div class="slot-prize-symbols">🍊🍊🍊</div>
+        <div class="slot-prize-reward">10 POWER</div>
+      </div>
+      <div class="slot-prize-item">
+        <div class="slot-prize-symbols">🍇🍇🍇</div>
+        <div class="slot-prize-reward">10 POWER</div>
+      </div>
+      <div class="slot-prize-item">
+        <div class="slot-prize-symbols slot-prize-symbols--small" data-i18n="slot_two_match_label">Any 2</div>
+        <div class="slot-prize-reward">3 POWER</div>
+      </div>
+    </div>
+
+    <!-- Reels -->
+    <div class="slot-wrap">
+      <div class="slot-machine-body">
+        <div class="slot-reel-box" id="slot-r1"><span>🎰</span></div>
+        <div class="slot-reel-divider"></div>
+        <div class="slot-reel-box" id="slot-r2"><span>🎰</span></div>
+        <div class="slot-reel-divider"></div>
+        <div class="slot-reel-box" id="slot-r3"><span>🎰</span></div>
+      </div>
+      <div class="slot-payline"></div>
+    </div>
+
+    <button class="dice-roll-btn" id="slot-spin-btn-modal" data-i18n="slot_watch_ad_btn">Watch Ad &amp; Spin 🎰</button>
+  </div>
+</div>
+
+<!-- ══════════════════ SLOT — RESULT MODAL ══════════════════ -->
+<div class="slot-overlay" id="slot-result-modal" style="display:none">
+  <div class="slot-sheet slot-result-sheet">
+    <div class="slot-result-reels">
+      <span id="slotres-r1">🎰</span>
+      <span id="slotres-r2">🎰</span>
+      <span id="slotres-r3">🎰</span>
+    </div>
+    <div class="slot-result-badge" id="slot-result-badge"></div>
+    <div class="slot-result-power" id="slot-result-power"></div>
+    <div class="slot-result-msg" id="slot-result-msg"></div>
+    <div class="slot-result-timer-label" data-i18n="slot_next_spin_label">Next spin in</div>
+    <div class="slot-result-timer" id="slot-result-timer">15:00</div>
+    <button class="dice-roll-btn slot-result-close-btn" id="slot-result-close" data-i18n="slot_result_close">Got it!</button>
+  </div>
+</div>
+
+<!-- ══════════════════ WITHDRAW MODAL ══════════════════ -->
+<div class="modal-overlay wd-overlay" id="withdraw-modal">
+  <div class="modal-sheet wd-sheet">
+    <div class="modal-handle"></div>
+    <button class="modal-close" id="wd-close"><i data-lucide="x"></i></button>
+
+    <!-- Step 1: Info / preview -->
+    <div class="wd-step" id="wd-step-1">
+      <div class="wd-icon-wrap">
+        <div class="wd-icon wd-icon--ton">
+          <span class="wd-icon-ring"></span>
+          <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M28 0C12.536 0 0 12.536 0 28s12.536 28 28 28 28-12.536 28-28S43.464 0 28 0z" fill="#0098EA"/>
+            <path d="M37.946 15.5H18.054c-3.5 0-5.5 4-3.5 6.9l11.5 17.5c.9 1.4 3 1.4 3.9 0l11.5-17.5c2-2.9 0-6.9-3.508-6.9zM26.5 31.1l-7.5-11.4h7.5v11.4zm3 0V19.7h7.5l-7.5 11.4z" fill="white"/>
+          </svg>
+        </div>
+      </div>
+      <div class="wd-title" data-i18n="swap_hashes_to_ton">Swap HASHES → TON</div>
+      <div class="wd-subtitle" data-i18n="swap_modal_sub">Convert your mined balance into TON instantly.</div>
+
+      <!-- Hero: you'll receive -->
+      <div class="wd-receive-box">
+        <div class="wd-receive-label" data-i18n="you_will_receive">You'll receive</div>
+        <div class="wd-receive-val" id="wd-receive-display">≈ — TON</div>
+      </div>
+
+      <!-- Rate rows -->
+      <div class="wd-rate-box">
+        <div class="wd-rate-row">
+          <span class="wd-rate-label"><span class="wd-rate-ic"><i data-lucide="user"></i></span><span data-i18n="your_balance">Your balance</span></span>
+          <span class="wd-rate-val accent-ton-text" id="wd-balance-display">0 HASHES</span>
+        </div>
+        <div class="wd-rate-divider"></div>
+        <div class="wd-rate-row">
+          <span class="wd-rate-label"><span class="wd-rate-ic"><i data-lucide="arrow-up-down"></i></span><span data-i18n="rate">Rate</span></span>
+          <span class="wd-rate-val" id="wd-rate-display">1,000 HASHES = — TON</span>
+        </div>
+        <div class="wd-rate-divider"></div>
+        <div class="wd-rate-row">
+          <span class="wd-rate-label"><span class="wd-rate-ic"><i data-lucide="shield"></i></span><span class="wd-min-label" data-i18n="min_swap">Minimum swap</span></span>
+          <span class="wd-rate-val wd-min-val" id="wd-min-display">— HASHES</span>
+        </div>
+      </div>
+
+      <div class="wd-notice"><i data-lucide="alert-triangle"></i><span data-i18n="wd_notice">Your HASHES balance will be fully cleared on swap.</span></div>
+      <button class="submit-btn wd-continue-btn" id="wd-step1-btn"><span data-i18n="continue_arrow">Continue →</span></button>
+    </div>
+
+    <!-- Step 2: Wallet address -->
+    <div class="wd-step" id="wd-step-2" style="display:none">
+      <div class="wd-step-header">
+        <button class="wd-back-btn" id="wd-back-1"><i data-lucide="arrow-left"></i></button>
+        <div class="wd-title" data-i18n="destination_wallet">Destination Wallet</div>
+      </div>
+      <div class="wd-step-sub" data-i18n="dest_wallet_sub">Enter your TON wallet address to receive funds.</div>
+      <div class="form-group">
+        <div class="form-label" data-i18n="wallet_label">TON Wallet Address</div>
+        <input class="form-input" id="wd-wallet" type="text" data-i18n-placeholder="wallet_placeholder" placeholder="UQ… or EQ…" autocomplete="off">
+        <div class="form-hint form-hint--error" id="wd-wallet-err" style="display:none"></div>
+      </div>
+      <button class="submit-btn" id="wd-step2-btn"><span data-i18n="continue_arrow">Continue →</span></button>
+    </div>
+
+    <!-- Step 3: Referral gate -->
+    <div class="wd-step" id="wd-step-3" style="display:none">
+      <div class="wd-step-header">
+        <button class="wd-back-btn" id="wd-back-2"><i data-lucide="arrow-left"></i></button>
+        <div class="wd-title">Team Requirement</div>
+      </div>
+      <div class="wd-step-sub">You need at least 3 valid referrals to swap.</div>
+
+      <!-- loading -->
+      <div id="wd-ref-loading" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 0;color:var(--t3);font-size:13px">
+        <i data-lucide="loader" style="width:24px;height:24px;animation:spin 1s linear infinite"></i>
+        <span>Checking your team…</span>
+      </div>
+
+      <!-- pass state -->
+      <div id="wd-ref-pass" style="display:none;flex-direction:column;align-items:center;gap:14px;width:100%">
+        <div style="width:68px;height:68px;border-radius:50%;background:rgba(45,200,154,0.14);border:1px solid rgba(45,200,154,0.4);display:flex;align-items:center;justify-content:center;color:var(--success)">
+          <i data-lucide="users" style="width:30px;height:30px"></i>
+        </div>
+        <div style="text-align:center">
+          <div id="wd-ref-count" style="font-size:36px;font-weight:900;color:var(--success);line-height:1">0</div>
+          <div style="font-size:13px;color:var(--t2);margin-top:5px">valid referrals</div>
+        </div>
+        <div style="width:100%;padding:11px 14px;border-radius:12px;background:rgba(45,200,154,0.08);border:1px solid rgba(45,200,154,0.28);font-size:12.5px;color:var(--success);text-align:center">
+          ✓ Team requirement met — you can proceed
+        </div>
+        <button class="submit-btn wd-continue-btn" id="wd-step3-btn" style="margin-top:0">Continue →</button>
+      </div>
+
+      <!-- fail state -->
+      <div id="wd-ref-fail" style="display:none;flex-direction:column;align-items:center;gap:14px;width:100%">
+        <div style="width:68px;height:68px;border-radius:50%;background:rgba(240,71,71,0.10);border:1px solid rgba(240,71,71,0.35);display:flex;align-items:center;justify-content:center;color:var(--danger)">
+          <i data-lucide="users" style="width:30px;height:30px"></i>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:13px;color:var(--t2);margin-bottom:6px">Your referrals</div>
+          <div style="font-size:32px;font-weight:900;line-height:1">
+            <span id="wd-ref-count-fail" style="color:var(--danger)">0</span><span style="color:var(--t3);font-size:20px"> / 3</span>
+          </div>
+        </div>
+        <div style="width:100%;padding:11px 14px;border-radius:12px;background:rgba(240,71,71,0.07);border:1px solid rgba(240,71,71,0.28);font-size:12.5px;color:var(--danger);text-align:center;line-height:1.5">
+          Invite <strong id="wd-ref-needed">3</strong> more friend(s) to unlock withdrawals
+        </div>
+        <button class="submit-btn" id="wd-ref-invite-btn" style="margin-top:0">Invite Friends →</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Memo (optional) -->
+    <div class="wd-step" id="wd-step-4" style="display:none">
+      <div class="wd-step-header">
+        <button class="wd-back-btn" id="wd-back-3"><i data-lucide="arrow-left"></i></button>
+        <div class="wd-title" data-i18n="tag_memo">Tag / Memo</div>
+      </div>
+      <div class="wd-step-sub" data-i18n="memo_step_sub">Required by some exchanges. Leave blank if sending to a personal wallet.</div>
+      <div class="form-group">
+        <div class="form-label"><span data-i18n="memo_label">Memo</span> <span class="form-optional" data-i18n="memo_optional">(optional)</span></div>
+        <input class="form-input" id="wd-memo" type="text" data-i18n-placeholder="memo_placeholder" placeholder="Optional memo / tag">
+      </div>
+      <button class="submit-btn" id="wd-step4-btn" data-i18n="confirm_swap">Confirm Swap</button>
+    </div>
+
+    <!-- Step 5: Progress -->
+    <div class="wd-step" id="wd-step-5" style="display:none">
+      <div class="wd-icon-wrap">
+        <div class="wd-icon wd-icon--progress"><i data-lucide="loader"></i></div>
+      </div>
+      <div class="wd-title" id="wd-progress-title" data-i18n="processing_swap">Processing swap…</div>
+      <div class="wd-progress-bar-wrap"><div class="wd-progress-bar" id="wd-progress-bar"></div></div>
+      <div class="wd-progress-sub" id="wd-progress-sub" data-i18n="swap_queued">Your request has been queued. This may take a few minutes.</div>
+      <button class="submit-btn" id="wd-done-btn" style="display:none" data-i18n="done">Done</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ PAYMENT MODAL ══════════════════ -->
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal-sheet pay-sheet">
+    <div class="modal-handle"></div>
+    <button class="modal-close" id="pay-close"><i data-lucide="x"></i></button>
+
+    <!-- Hero: package info -->
+    <div class="pay-hero-modern">
+      <div class="pay-mod-icon">
+        <span class="pay-mod-icon-ring"></span>
+        <i data-lucide="zap"></i>
+      </div>
+      <div class="pay-mod-title" data-i18n="buy_power_tab">Buy Power</div>
+      <div class="pay-modern-power" id="pay-mod-power">0 <span>POWER</span></div>
+      <div class="pay-modern-bonus" id="pay-mod-bonus"></div>
+
+      <div class="pay-modern-grid">
+        <div class="pay-mod-stat">
+          <span class="pm-ic"><i data-lucide="tag"></i></span>
+          <span class="pm-label" data-i18n="pay_price">Price</span>
+          <strong class="pm-val" id="pay-mod-price">0 TON</strong>
+        </div>
+        <div class="pay-mod-stat">
+          <span class="pm-ic"><i data-lucide="zap"></i></span>
+          <span class="pm-label" data-i18n="pay_generates">Generates</span>
+          <strong class="pm-val" id="pay-mod-hashes">0 HASHES</strong>
+        </div>
+        <div class="pay-mod-stat">
+          <span class="pm-ic pm-ic--g"><i data-lucide="trending-up"></i></span>
+          <span class="pm-label" data-i18n="pay_return">Return</span>
+          <strong class="pm-val tone-g-text" id="pay-mod-return">0 TON</strong>
+        </div>
+        <div class="pay-mod-stat">
+          <span class="pm-ic"><i data-lucide="clock"></i></span>
+          <span class="pm-label" data-i18n="pay_duration">Duration</span>
+          <strong class="pm-val" id="pay-mod-duration">24h</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- TON Connect — primary CTA -->
+    <button class="pay-tonconnect-btn" id="pay-tonconnect-btn">
+      <svg width="20" height="20" viewBox="0 0 56 56" fill="none"><path d="M28 56C43.464 56 56 43.464 56 28C56 12.536 43.464 0 28 0C12.536 0 0 12.536 0 28C0 43.464 12.536 56 28 56Z" fill="#0098EA"/><path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.6944 19.4202 14.4632 22.4861L26.2644 42.9409C27.0299 44.2765 28.9687 44.2765 29.7342 42.9409L41.5354 22.4861C43.3056 19.4202 41.0756 15.6277 37.5603 15.6277ZM26.2455 36.3839L23.7299 31.9239L17.9859 22.0436C17.5455 21.3039 18.0648 20.3496 18.9203 20.3496H26.2455V36.3839ZM38.0127 22.0436L32.2687 31.9239L29.7531 36.3839V20.3496H37.0783C37.9338 20.3496 38.4531 21.3039 38.0127 22.0436Z" fill="white"/></svg>
+      <span data-i18n="connect_wallet_pay">Connect Wallet &amp; Pay</span>
+    </button>
+
+  </div>
+</div>
+
+<!-- ══════════════════ POWER SUCCESS MODAL ══════════════════ -->
+<div class="modal-overlay" id="power-success-modal">
+  <div class="modal-sheet ps-sheet">
+    <div class="modal-handle"></div>
+
+    <div class="ps-burst" id="ps-burst"></div>
+
+    <div class="pay-hero-modern" style="padding-top:10px;">
+      <div class="pay-mod-icon" style="color:var(--primary); background:var(--primary-dim);">
+        <span class="pay-mod-icon-ring" style="border-color:var(--primary);"></span>
+        <i data-lucide="check"></i>
+      </div>
+      
+      <div class="pay-mod-title" data-i18n="power_activated">POWER Activated!</div>
+      <div class="pay-modern-power" id="ps-package-label" style="color:var(--primary);">+0 <span>POWER</span></div>
+      
+      <div class="pay-modern-grid" style="margin-top:20px;">
+        <div class="pay-mod-stat">
+          <span class="pm-ic"><i data-lucide="zap"></i></span>
+          <span class="pm-label" data-i18n="total">Total</span>
+          <strong class="pm-val" id="ps-total-power">0</strong>
+        </div>
+        <div class="pay-mod-stat">
+          <span class="pm-ic"><i data-lucide="clock"></i></span>
+          <span class="pm-label" data-i18n="pay_duration">Duration</span>
+          <strong class="pm-val" id="ps-duration-val">24h</strong>
+        </div>
+      </div>
+    </div>
+
+    <button class="ps-close-btn submit-btn" id="ps-close-btn" style="margin-top:24px; width:100%;">
+      <span data-i18n="got_it">Got it!</span>
+    </button>
+  </div>
+</div>
+
+<!-- NOT REGISTERED MODAL -->
+<div class="modal-overlay" id="not-registered-modal">
+  <div class="modal-sheet" style="text-align:center;align-items:center;gap:20px;padding:32px 24px 28px">
+    <div style="font-size:52px;line-height:1">🤖</div>
+    <div>
+      <h2 style="margin:0 0 10px;font-size:20px;font-weight:700;color:var(--primary-l)" data-i18n="not_registered_title">Not Registered</h2>
+      <p style="margin:0;font-size:14px;color:var(--t2);line-height:1.5" data-i18n="not_registered_body">To use Open Swap, please open the bot, press /start and select your language — then come back here.</p>
+    </div>
+    <button class="btn-produce" style="width:100%;margin-top:4px" onclick="window.Telegram&&Telegram.WebApp.close()" data-i18n="not_registered_btn">Close App</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ALERT MODAL -->
+<div class="alert-overlay" id="alert-modal">
+  <div class="alert-sheet">
+    <div class="alert-display" id="alert-display">
+      <div class="alert-display-icon" id="alert-icon">⚠️</div>
+      <div class="alert-display-power" id="alert-power"></div>
+    </div>
+    <div class="alert-badge" id="alert-badge"></div>
+    <div class="alert-msg" id="alert-msg"></div>
+    <button class="dice-roll-btn alert-ok-btn" id="alert-ok">OK</button>
+  </div>
+</div>
+
+<div class="alert-overlay" id="input-modal">
+  <div class="alert-sheet">
+    <div class="alert-display">
+      <div class="alert-display-icon">🤖</div>
+    </div>
+    <div class="alert-badge" id="input-modal-title"></div>
+    <div class="alert-msg" id="input-modal-msg"></div>
+    <input type="url" id="input-modal-field" class="input-modal-input" placeholder="" autocomplete="off" />
+    <div id="input-modal-error" class="input-modal-error"></div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="dice-roll-btn" id="input-modal-cancel" style="flex:1;background:var(--card-h);color:var(--t2);box-shadow:none">Cancelar</button>
+      <button class="dice-roll-btn alert-ok-btn" id="input-modal-confirm" style="flex:2">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- WELCOME BONUS MODAL -->
+<div class="modal-overlay" id="welcome-modal">
+  <div class="modal-sheet" style="text-align:center;align-items:center;gap:20px;padding:32px 24px 28px">
+    <div style="width:64px;height:64px;border-radius:18px;background:rgba(255,214,10,0.1);color:var(--accent);display:flex;align-items:center;justify-content:center">
+      <i data-lucide="gift" style="width:32px;height:32px"></i>
+    </div>
+    <div>
+      <div style="font-size:1.3rem;font-weight:700;color:var(--t1);margin-bottom:6px" data-i18n="welcome_modal_title">Welcome to TrueMine!</div>
+      <div style="font-size:0.95rem;color:var(--t2);line-height:1.4" data-i18n="welcome_modal_sub">Here is your welcome bonus to start mining.</div>
+    </div>
+    <div style="background:var(--card-h);width:100%;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)">
+      <div style="font-size:0.85rem;color:var(--t2);margin-bottom:4px" data-i18n="welcome_modal_amount_label">Bonus Amount</div>
+      <div style="font-size:1.5rem;font-weight:800;color:var(--accent)"><span id="welcome-modal-amount">0</span> POWER</div>
+    </div>
+    <button class="dice-roll-btn" id="welcome-modal-btn" style="width:100%;margin-top:4px" data-i18n="welcome_modal_btn">Claim Bonus</button>
+  </div>
+</div>
+
+<script src="i18n.js?v=2"></script>
+<script src="app.js?v=6"></script>
+<script>
+  (function waitForAd() {
+    if (typeof show_11160788 === 'function') {
+      show_11160788({
+        type: 'inApp',
+        inAppSettings: {
+          frequency: 2,
+          capping: 0.1,
+          interval: 30,
+          timeout: 20,
+          everyPage: false
+        }
+      });
+    } else {
+      setTimeout(waitForAd, 300);
+    }
+  })();
+</script>
+</body>
+</html>
