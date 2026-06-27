@@ -591,7 +591,7 @@ app.post('/miniapp/buy-power', (req, res) => {
   
   res.json({
     ok: true,
-    deposit_address: 'UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABkZGVm',
+    deposit_address: 'UQCUXBy7Lb2ogDoDuyc1K0KBoPuUZXtGP0KeCnDpsd_k9IRR',
     ton_cost: tonCost,
     memo: memo,
     deposit_id: depositId
@@ -629,7 +629,7 @@ app.post('/miniapi/buy-power', (req, res) => {
   
   res.json({
     ok: true,
-    deposit_address: 'UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABkZGVm',
+    deposit_address: 'UQCUXBy7Lb2ogDoDuyc1K0KBoPuUZXtGP0KeCnDpsd_k9IRR',
     ton_cost: tonCost,
     memo: memo,
     deposit_id: depositId
