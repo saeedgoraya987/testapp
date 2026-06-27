@@ -8,7 +8,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
 // ── In-memory Database ──
 const DB = {
@@ -43,28 +42,21 @@ function generateId() {
 }
 
 function validateInitData(initData) {
-  // In production, validate Telegram initData
-  // For testing, accept any non-empty string
   return initData && initData.length > 0;
 }
 
 function getUserIdFromInitData(initData) {
   try {
-    // Try to parse as JSON first
     if (initData.startsWith('{')) {
       const data = JSON.parse(initData);
       return data.user?.id?.toString() || '123456789';
     }
-    
-    // Try URLSearchParams
     const params = new URLSearchParams(initData);
     const userStr = params.get('user');
     if (userStr) {
       const user = JSON.parse(userStr);
       return user.id.toString();
     }
-    
-    // Fallback to test user
     return '123456789';
   } catch {
     return '123456789';
@@ -73,7 +65,6 @@ function getUserIdFromInitData(initData) {
 
 function getUser(id) {
   if (!DB.users.has(id)) {
-    // Create user with welcome bonus
     DB.users.set(id, {
       id: id,
       telegram_id: parseInt(id) || 123456789,
@@ -109,20 +100,13 @@ function saveUser(user) {
   DB.users.set(user.id, user);
 }
 
-function fmtPower(n) {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(2) + 'K';
-  return n.toFixed(2);
-}
-
 function calculateHashesPerDay(power) {
   return (power / 1000) * CONFIG.DAILY_HASHES_PER_1K;
 }
 
-// ── API Routes ──
+// ── API Routes (must come BEFORE static files) ──
 
-// Auth - Main endpoint
+// Auth
 app.post('/miniapp/auth', (req, res) => {
   const { initData } = req.body;
   
@@ -133,7 +117,6 @@ app.post('/miniapp/auth', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Update user from initData if available
   try {
     if (initData.startsWith('{')) {
       const data = JSON.parse(initData);
@@ -206,19 +189,17 @@ app.get('/miniapi/ton-price', (req, res) => {
   });
 });
 
-// Start Production / Mine
+// Start Production
 app.post('/miniapi/start-production', (req, res) => {
   const { initData } = req.body;
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Check if user already has mining contract
   const hasActiveContract = user.contracts.some(c => !c.permanent && !c.expired);
   if (hasActiveContract) {
     return res.json({ ok: false, error: 'Already mining' });
   }
   
-  // Add production contract
   const contract = {
     id: generateId(),
     power: 100,
@@ -254,7 +235,6 @@ app.post('/miniapi/buy-power', (req, res) => {
   
   const tonCost = power_amount * CONFIG.TON_PER_POWER;
   
-  // Generate deposit
   DB.depositId++;
   const depositId = DB.depositId;
   const memo = `P${depositId}`;
@@ -279,13 +259,12 @@ app.post('/miniapi/buy-power', (req, res) => {
   });
 });
 
-// Poll Deposit (for SSE resume)
+// Poll Deposit
 app.get('/miniapi/poll-deposit', (req, res) => {
   const { initData } = req.query;
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Check for completed deposits
   let lastDepositId = 0;
   let lastDepositPower = 0;
   
@@ -294,7 +273,6 @@ app.get('/miniapi/poll-deposit', (req, res) => {
       if (id > lastDepositId) {
         lastDepositId = id;
         lastDepositPower = deposit.power || 0;
-        // Mark as claimed
         deposit.status = 'claimed';
       }
     }
@@ -337,10 +315,8 @@ app.post('/miniapi/claim', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Calculate hashes from active contracts
   let totalHashes = user.hashes || 0;
   
-  // Process contracts
   user.contracts = user.contracts.map(c => {
     if (c.permanent) return c;
     if (c.expired) return c;
@@ -356,7 +332,6 @@ app.post('/miniapi/claim', (req, res) => {
       c.expired = true;
     }
     
-    // Calculate earned hashes
     if (c.active) {
       const earned = (c.hashes_per_day / 86400) * (elapsed / 1000);
       totalHashes += earned;
@@ -380,7 +355,6 @@ app.post('/miniapi/mine', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Calculate hashes from active contracts
   const activeContracts = user.contracts.filter(c => c.active && !c.expired);
   let totalHashesPerDay = 0;
   
@@ -389,7 +363,7 @@ app.post('/miniapi/mine', (req, res) => {
   });
   
   const hashesPerSecond = totalHashesPerDay / 86400;
-  const earned = hashesPerSecond * 60; // Mine for 1 minute
+  const earned = hashesPerSecond * 60;
   
   user.hashes = (user.hashes || 0) + earned;
   saveUser(user);
@@ -403,7 +377,6 @@ app.post('/miniapi/mine', (req, res) => {
 
 // ── TASKS ──
 
-// Get tasks
 app.get('/miniapi/tasks', (req, res) => {
   const { initData } = req.query;
   const userId = getUserIdFromInitData(initData);
@@ -492,7 +465,6 @@ app.post('/miniapi/tasks/claim', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Check if task exists
   const task = [
     { id: 'invite_1', required: 1, pips: 2000 },
     { id: 'invite_3', required: 3, pips: 3000 },
@@ -507,12 +479,10 @@ app.post('/miniapi/tasks/claim', (req, res) => {
     return res.json({ ok: false, error: 'Invalid task' });
   }
   
-  // Check if already completed
   if (user.tasks_completed.includes(task_id)) {
     return res.json({ ok: false, error: 'already completed' });
   }
   
-  // Check eligibility
   if (task_id.startsWith('invite_')) {
     if (user.referral_count < task.required) {
       return res.json({ ok: false, error: 'not enough referrals', required: task.required });
@@ -535,7 +505,6 @@ app.post('/miniapi/tasks/claim', (req, res) => {
     user.ad2_next_claim_at = Date.now() + 6 * 60 * 60 * 1000;
   }
   
-  // Award POWER
   const pipsAwarded = task.pips || 0;
   user.power += pipsAwarded;
   user.tasks_completed.push(task_id);
@@ -556,7 +525,6 @@ app.post('/miniapi/tasks/slot-spin', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Check cooldown (15 minutes)
   if (Date.now() < user.slot_next_spin_at) {
     return res.json({ 
       ok: false, 
@@ -565,7 +533,6 @@ app.post('/miniapi/tasks/slot-spin', (req, res) => {
     });
   }
   
-  // Simulate slot
   const fruits = ['🍒', '🍋', '🍊', '🍇', '🍓', '⭐'];
   const reels = [
     fruits[Math.floor(Math.random() * fruits.length)],
@@ -603,7 +570,6 @@ app.post('/miniapi/tasks/ad-roll', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Check cooldown (24 hours)
   if (user.ad_claimed_today && Date.now() < user.ad_next_claim_at) {
     return res.json({ 
       ok: false, 
@@ -635,7 +601,6 @@ app.post('/miniapi/tasks/ad-roll2', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Check cooldown (6 hours)
   if (user.ad2_claimed_today && Date.now() < user.ad2_next_claim_at) {
     return res.json({ 
       ok: false, 
@@ -732,7 +697,6 @@ app.post('/miniapi/team', (req, res) => {
       current_page: page
     });
   } else {
-    // Log tab - simplified
     res.json({
       ok: true,
       log: [],
@@ -751,7 +715,6 @@ app.post('/miniapi/referral', (req, res) => {
   }
   
   const referrer = getUser(referrerId);
-  const newUser = getUser(newUserId);
   
   if (referrer.referrals.includes(newUserId)) {
     return res.json({ ok: false, error: 'Already referred' });
@@ -779,7 +742,6 @@ app.post('/miniapi/withdraw', (req, res) => {
   const userId = getUserIdFromInitData(initData);
   const user = getUser(userId);
   
-  // Check minimum
   if (!user.hashes || user.hashes < CONFIG.WD_MIN_HASHES) {
     return res.json({ 
       ok: false, 
@@ -787,7 +749,6 @@ app.post('/miniapi/withdraw', (req, res) => {
     });
   }
   
-  // Check referrals
   if ((user.referral_count || 0) < CONFIG.WD_MIN_REFERRALS) {
     return res.json({ 
       ok: false, 
@@ -820,22 +781,17 @@ app.get('/miniapi/deposit-stream', (req, res) => {
     'Connection': 'keep-alive'
   });
   
-  // Send initial connection
   res.write('retry: 10000\n\n');
   res.write('event: connected\ndata: {"status":"ok"}\n\n');
   
-  // Keep connection alive with ping
   const pingInterval = setInterval(() => {
     res.write('event: ping\ndata: {}\n\n');
   }, 30000);
   
-  // Simulate deposit detection (in production, this would listen to blockchain events)
   let checkInterval = setInterval(() => {
-    // Check for completed deposits for this user
     for (const [id, deposit] of DB.deposits) {
       if (deposit.userId === userId && deposit.status === 'pending') {
-        // Simulate deposit confirmation after random time
-        if (Math.random() < 0.1) { // 10% chance per check
+        if (Math.random() < 0.1) {
           deposit.status = 'completed';
           const user = getUser(userId);
           user.power += deposit.power;
@@ -851,29 +807,30 @@ app.get('/miniapi/deposit-stream', (req, res) => {
     }
   }, 5000);
   
-  // Cleanup on disconnect
   req.on('close', () => {
     clearInterval(pingInterval);
     clearInterval(checkInterval);
   });
 });
 
-// ── Static Files ──
+// ── STATIC FILES (must come AFTER API routes) ──
 
-// Serve the HTML file
-app.get('/miniapp', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'miniapp', 'index.html'));
+// Serve static files from public directory
+app.use('/miniapp', express.static(path.join(__dirname, 'public', 'miniapp')));
+
+// Redirect root to /miniapp
+app.get('/', (req, res) => {
+  res.redirect('/miniapp');
 });
 
-app.get('/miniapp/*', (req, res) => {
-  const filePath = req.params[0];
-  res.sendFile(path.join(__dirname, 'public', 'miniapp', filePath));
+// Catch-all for any other routes - serve the index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'miniapp', 'index.html'));
 });
 
 // ── Initialize with test data ──
 
 function initTestData() {
-  // Create test users for leaderboard
   const names = ['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack'];
   for (let i = 0; i < 20; i++) {
     const id = `user_${i + 1}`;
@@ -898,12 +855,16 @@ function initTestData() {
         welcome_bonus_claimed: Math.random() > 0.3,
         created_at: Date.now() - Math.random() * 86400000 * 30,
         language: 'en',
+        ad_claimed_today: false,
+        ad_next_claim_at: 0,
+        ad2_claimed_today: false,
+        ad2_next_claim_at: 0,
+        slot_next_spin_at: 0,
         tasks_completed: []
       });
     }
   }
   
-  // Ensure test user exists
   if (!DB.users.has('123456789')) {
     DB.users.set('123456789', {
       id: '123456789',
@@ -925,6 +886,11 @@ function initTestData() {
       welcome_bonus_claimed: false,
       created_at: Date.now(),
       language: 'en',
+      ad_claimed_today: false,
+      ad_next_claim_at: 0,
+      ad2_claimed_today: false,
+      ad2_next_claim_at: 0,
+      slot_next_spin_at: 0,
       tasks_completed: []
     });
   }
@@ -939,6 +905,6 @@ initTestData();
 app.listen(PORT, () => {
   console.log(`\n🚀 Open Swap Server running on http://localhost:${PORT}`);
   console.log(`📊 Users: ${DB.users.size}`);
-  console.log(`📁 Serving from: ${path.join(__dirname, 'public')}`);
+  console.log(`📁 Serving from: ${path.join(__dirname, 'public', 'miniapp')}`);
   console.log(`\n🔗 Open in browser: http://localhost:${PORT}/miniapp\n`);
 });
