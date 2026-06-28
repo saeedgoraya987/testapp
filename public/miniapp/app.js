@@ -1,9 +1,9 @@
 /* =====================================================
-   Open Swap Mini App — app.js (No Ads Version)
+   Every Gram Mini App — app.js (No Ads Version)
    ===================================================== */
 
-const APP_NAME = 'Open Swap';
-const APP_BOT_USERNAME = 'OpenSwapBot';
+const APP_NAME = 'Every Gram';
+const APP_BOT_USERNAME = 'everygrambot';
 const API_BASE = '/miniapp';
 
 // ── I18n helper ──
