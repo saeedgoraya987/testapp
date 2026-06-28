@@ -1005,41 +1005,76 @@ function renderTeam() {
   const refLink = botUsername ? `https://t.me/${botUsername}?start=${u.telegram_id}` : `https://t.me/?start=${u.telegram_id}`;
   state.refLink = refLink;
   
-  // Stats
+  // Get referral stats from user object
   const refs = u.referral_count || 0;
   const validRefs = u.valid_refs ?? 0;
   const invalidRefs = u.invalid_refs ?? Math.max(0, refs - validRefs);
+  const premiumRefs = u.premium_refs || 0;
   const refBonusReg = u.ref_bonus_regular || 2000;
   const refBonusPrem = u.ref_bonus_premium || 4000;
   const powerEarned = u.power_from_refs || (validRefs * refBonusReg);
+  const commissionEarned = u.commission_earned || 0;
+  const affiliatePercent = u.ref_affiliate_purchase_percent || 10;
   
+  // ── Update Referral Bonus display (with K formatting) ──
   const refBonusRegEl = document.getElementById('team-ref-bonus');
+  if (refBonusRegEl) {
+    if (refBonusReg >= 1000) {
+      refBonusRegEl.textContent = '+' + (refBonusReg / 1000).toFixed(2) + 'K';
+    } else {
+      refBonusRegEl.textContent = '+' + refBonusReg.toLocaleString();
+    }
+  }
+  
+  // ── Update Premium Bonus display (with K formatting) ──
   const refBonusPremEl = document.getElementById('team-prem-bonus');
+  if (refBonusPremEl) {
+    if (refBonusPrem >= 1000) {
+      refBonusPremEl.textContent = '+' + (refBonusPrem / 1000).toFixed(2) + 'K';
+    } else {
+      refBonusPremEl.textContent = '+' + refBonusPrem.toLocaleString();
+    }
+  }
+  
+  // ── Update Commission display ──
   const commBonusEl = document.getElementById('team-comm-bonus');
-  if (refBonusRegEl) refBonusRegEl.textContent = '+' + fmtPower(refBonusReg);
-  if (refBonusPremEl) refBonusPremEl.textContent = '+' + fmtPower(refBonusPrem);
-  if (commBonusEl) commBonusEl.textContent = (u.ref_affiliate_purchase_percent || 10) + '%';
+  if (commBonusEl) {
+    commBonusEl.textContent = affiliatePercent + '%';
+  }
   
-  document.getElementById('team-total-refs').textContent = refs;
-  document.getElementById('team-valid-refs').textContent = validRefs;
-  document.getElementById('team-invalid-refs').textContent = invalidRefs;
-  document.getElementById('team-power-earned').textContent = fmtPower(powerEarned);
+  // ── Update Stats ──
+  const totalEl = document.getElementById('team-total-refs');
+  const validEl = document.getElementById('team-valid-refs');
+  const invalidEl = document.getElementById('team-invalid-refs');
+  const powerEl = document.getElementById('team-power-earned');
   
-  // Share button
-  document.getElementById('team-share-btn').onclick = () => {
-    const fullMessage = t('share_message') + '\n' + state.refLink;
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(state.refLink)}&text=${encodeURIComponent(fullMessage)}`;
-    if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
-    else window.open(shareUrl, '_blank');
-  };
+  if (totalEl) totalEl.textContent = refs;
+  if (validEl) validEl.textContent = validRefs;
+  if (invalidEl) invalidEl.textContent = invalidRefs;
+  if (powerEl) powerEl.textContent = fmtPower(powerEarned + commissionEarned);
   
-  document.getElementById('copy-ref-btn').onclick = () => {
-    navigator.clipboard.writeText(state.refLink).then(() => {
-      showToast(t('link_copied'), 'success');
-    });
-  };
+  // ── Share button ──
+  const shareBtn = document.getElementById('team-share-btn');
+  if (shareBtn) {
+    shareBtn.onclick = () => {
+      const fullMessage = t('share_message') + '\n' + state.refLink;
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(state.refLink)}&text=${encodeURIComponent(fullMessage)}`;
+      if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
+      else window.open(shareUrl, '_blank');
+    };
+  }
   
-  // Tab switching
+  // ── Copy link button ──
+  const copyBtn = document.getElementById('copy-ref-btn');
+  if (copyBtn) {
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(state.refLink).then(() => {
+        showToast(t('link_copied'), 'success');
+      });
+    };
+  }
+  
+  // ── Tab switching ──
   document.querySelectorAll('.team-tab').forEach(btn => {
     btn.onclick = () => {
       const tab = btn.dataset.teamTab;
