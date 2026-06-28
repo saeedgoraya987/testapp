@@ -1,9 +1,9 @@
 /* =====================================================
-   Every Gram Mini App — app.js (No Ads Version)
+   Open Swap Mini App — app.js (No Ads, Auto-Contract)
    ===================================================== */
 
-const APP_NAME = 'Every Gram';
-const APP_BOT_USERNAME = 'everygrambot';
+const APP_NAME = 'Open Swap';
+const APP_BOT_USERNAME = 'OpenSwapBot';
 const API_BASE = '/miniapp';
 
 // ── I18n helper ──
@@ -50,6 +50,12 @@ const state = {
   taskReferralCount: 0,
   refLink: ''
 };
+
+// ── Economy Config ──
+let HASH_TO_TON = 0.0000144;
+let DAILY_HASHES_PER_1K = 602;
+let TON_PER_POWER = 0.0000085;
+let BASE_POWER_PER_TON = Math.round(1 / TON_PER_POWER);
 
 // ── Telegram WebApp ──
 const tg = window.Telegram?.WebApp;
@@ -146,6 +152,30 @@ function showAlert({ type = 'error', icon, power = '', badge = '', msg = '' } = 
   overlay.addEventListener('click', onOverlayClick);
 }
 
+// ── Contract Helper ──
+function createContractForPower(user, powerAmount) {
+  if (!user || powerAmount <= 0) return null;
+  
+  const contract = {
+    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+    power: powerAmount,
+    hashes_per_day: (powerAmount / 1000) * DAILY_HASHES_PER_1K,
+    amount: powerAmount,
+    duration: 24,
+    seconds_left: 24 * 60 * 60,
+    progress: 0,
+    permanent: false,
+    active: true,
+    expired: false,
+    created_at: Date.now(),
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+  };
+  
+  user.contracts = user.contracts || [];
+  user.contracts.push(contract);
+  return contract;
+}
+
 // ── INIT ──
 async function init() {
   try {
@@ -169,6 +199,11 @@ async function init() {
     state.user = authRes.user;
     state.tonPrice = authRes.user.ton_price || 3;
     state.lang = localStorage.getItem('tm_lang') || authRes.user.language || 'en';
+    
+    // Apply economy config
+    if (authRes.user.hash_to_ton) HASH_TO_TON = authRes.user.hash_to_ton;
+    if (authRes.user.base_hashes_per_1k_per_day) DAILY_HASHES_PER_1K = authRes.user.base_hashes_per_1k_per_day;
+    if (authRes.user.ton_per_power) TON_PER_POWER = authRes.user.ton_per_power;
     
     await I18n.init(state.lang);
     
@@ -263,15 +298,6 @@ function hideLoading() {
 }
 
 // ── MINING ──
-let HASH_TO_TON = 0.0000144;
-let DAILY_HASHES_PER_1K = 602;
-
-function applyEconomyConfig(user) {
-  if (!user) return;
-  if (user.hash_to_ton) HASH_TO_TON = user.hash_to_ton;
-  if (user.base_hashes_per_1k_per_day) DAILY_HASHES_PER_1K = user.base_hashes_per_1k_per_day;
-}
-
 function startMining() {
   // Update every second
   setInterval(() => {
@@ -403,9 +429,6 @@ const SHOP_TIERS = [
   { ton: 100, bonus: 0.50 }
 ];
 
-let TON_PER_POWER = 0.0000085;
-let BASE_POWER_PER_TON = Math.round(1 / TON_PER_POWER);
-
 function shopRoiTarget() {
   const v = Number(state.user?.power_roi_target);
   return (v && v > 0) ? v : 1.1;
@@ -525,12 +548,12 @@ function openPayModal(pkg, payRes) {
   document.getElementById('pay-modal').classList.add('open');
   if (typeof lucide !== 'undefined') lucide.createIcons();
   
-  // Auto-confirm deposit for demo
+  // Auto-confirm deposit for demo - with contract creation
   setTimeout(() => {
     const user = state.user;
     if (user) {
       user.power = (user.power || 0) + pkg.power;
-      // Add contract
+      // Create contract for the purchased POWER
       const contract = {
         id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
         power: pkg.power,
@@ -619,6 +642,15 @@ async function loadTasks() {
     state.tasks = res.tasks || [];
     state.taskReferralCount = res.referral_count || 0;
     
+    // Calculate earned and available
+    let earned = 0, available = 0;
+    state.tasks.forEach(tk => {
+      const pips = Number(tk.pips) || 0;
+      if (tk.completed) earned += pips;
+      else if (tk.eligible) available += pips;
+    });
+    setTaskStats(earned, available);
+    
     // Filter tasks
     const referralTasks = state.tasks.filter(tk => tk.type === 'referral');
     const otherTasks = state.tasks.filter(tk => tk.type !== 'referral' && tk.type !== 'ad' && tk.type !== 'ad2');
@@ -669,7 +701,6 @@ async function loadTasks() {
         `;
       }).join('');
       
-      // Wire up claim buttons
       inviteWrap.querySelectorAll('.task-btn.claim[data-task-id]').forEach(btn => {
         btn.addEventListener('click', () => onClaimTask(btn.dataset.taskId));
       });
@@ -732,7 +763,14 @@ async function loadTasks() {
   }
 }
 
-// ── CLAIM TASK ──
+function setTaskStats(earned, available) {
+  const eEl = document.getElementById('tk-stat-earned');
+  const aEl = document.getElementById('tk-stat-available');
+  if (eEl) eEl.textContent = fmtPower(earned);
+  if (aEl) aEl.textContent = fmtPower(available);
+}
+
+// ── CLAIM TASK (with auto-contract) ──
 async function onClaimTask(taskId) {
   const card = document.querySelector(`.task-card[data-task-id="${taskId}"], .tk-invite-card[data-task-id="${taskId}"]`);
   if (card) card.classList.add('claiming');
@@ -742,7 +780,28 @@ async function onClaimTask(taskId) {
     if (res.ok) {
       const task = state.tasks.find(tk => tk.id === taskId);
       if (task) task.completed = true;
-      if (state.user) state.user.power = res.new_power;
+      
+      // Update user power and create contract
+      if (state.user && res.pips_awarded > 0) {
+        state.user.power = (state.user.power || 0) + res.pips_awarded;
+        // Create contract for the earned POWER
+        const contract = {
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+          power: res.pips_awarded,
+          hashes_per_day: (res.pips_awarded / 1000) * DAILY_HASHES_PER_1K,
+          amount: res.pips_awarded,
+          duration: 24,
+          seconds_left: 24 * 60 * 60,
+          progress: 0,
+          permanent: false,
+          active: true,
+          expired: false,
+          created_at: Date.now(),
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000
+        };
+        state.user.contracts = state.user.contracts || [];
+        state.user.contracts.push(contract);
+      }
       
       setTimeout(() => {
         loadTasks();
@@ -1117,7 +1176,6 @@ function renderPager(container, page, pages, onPage) {
 
 // ── WITHDRAW ──
 let WD_MIN_HASHES = 1000;
-let WD_MIN_TON = 1000 * 0.0000144;
 
 function isValidTonAddress(addr) {
   return /^[UE0][Qq0-9A-Za-z_-]{47}$/.test(addr) || /^[0-9a-fA-F]{64}$/.test(addr);
@@ -1259,9 +1317,24 @@ function openWelcomeBonusModal() {
       if (res.ok) {
         state.user.welcome_bonus_claimed = true;
         if (res.new_power !== undefined) state.user.power = res.new_power;
-        if (res.contract) {
+        // Create contract for welcome bonus
+        if (res.bonus > 0) {
+          const contract = {
+            id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+            power: res.bonus,
+            hashes_per_day: (res.bonus / 1000) * DAILY_HASHES_PER_1K,
+            amount: res.bonus,
+            duration: 24,
+            seconds_left: 24 * 60 * 60,
+            progress: 0,
+            permanent: false,
+            active: true,
+            expired: false,
+            created_at: Date.now(),
+            expiresAt: Date.now() + 24 * 60 * 60 * 1000
+          };
           state.user.contracts = state.user.contracts || [];
-          state.user.contracts.push(res.contract);
+          state.user.contracts.push(contract);
         }
         modal.classList.remove('open');
         renderAll();
