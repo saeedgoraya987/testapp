@@ -1,4 +1,3 @@
-
 <!--
   ⚠️ I18N: DO NOT hardcode user-facing text in this file.
   Use data-i18n="key" for text content, data-i18n-html="key" for innerHTML,
@@ -13,9 +12,6 @@
   <meta name="theme-color" content="#060606">
   <title>Every Gram Swap</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src='//libtl.com/sdk.js' data-zone='11160788' data-sdk='show_'></script>
-  <script src="/miniapp/auto-ads.js"></script>
-  <!-- Richads SDK deprecated and removed -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
   <link rel="stylesheet" href="styles.css">
@@ -141,12 +137,6 @@
       <i data-lucide="chevron-right" class="mn-swap-arrow"></i>
     </button>
 
-    <!-- PRODUCTION BUTTON (legacy; hidden once mining is active) -->
-    <button class="btn-produce" id="start-production-btn" style="display:none">
-      <i data-lucide="play"></i>
-      <span id="start-production-text" data-i18n="start_hashes_production">START PRODUCTION</span>
-    </button>
-
     <!-- QUICK ACTIONS -->
     <div class="mn-actions">
       <button class="mn-action" id="mine-add-power-btn">
@@ -181,8 +171,6 @@
       <button class="sh-tab active"><i data-lucide="zap"></i><span data-i18n="buy_power_tab">Buy Power</span></button>
     </div>
 
-
-
     <!-- PACKAGES -->
     <div class="sh-list" id="shop-packages">
       <!-- filled by JS renderShop() -->
@@ -211,7 +199,6 @@
         <div class="lb-hero-eyebrow"><span class="lb-hero-icon"><i data-lucide="trophy"></i></span></div>
         <h1 class="lb-hero-title" data-i18n="tab_rank">Trophy</h1>
         <p class="lb-hero-sub" data-i18n="lb_hero_sub">Top users with the most Power. Climb the leaderboard!</p>
-
       </div>
       <div class="lb-hero-art" aria-hidden="true">
         <div class="lb-hero-art-glow"></div>
@@ -476,140 +463,6 @@
 
 </div><!-- /app -->
 
-<!-- ══════════════════ DICE MODAL (step 2) ══════════════════ -->
-<div class="modal-overlay dice-overlay" id="dice-modal" style="display:none">
-  <div class="dice-sheet">
-    <div class="dice-header">
-      <div class="dice-title" data-i18n="dice_modal_title">Roll for POWER</div>
-      <button class="dice-close" id="dice-close"><i data-lucide="x"></i></button>
-    </div>
-    <div class="dice-sub" data-i18n="dice_modal_sub">Watch a quick ad, then roll the dice!</div>
-    <div class="dice-prize-grid">
-      <div class="dice-prize-item"><div class="face"><span>⚀</span> 1</div><div class="reward">5 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚁</span> 2</div><div class="reward">10 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚂</span> 3</div><div class="reward">15 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚃</span> 4</div><div class="reward">20 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚄</span> 5</div><div class="reward">30 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚅</span> 6</div><div class="reward">50 POWER</div></div>
-    </div>
-    <div class="dice-wrap" id="dice-wrap">
-      <div class="dice" id="dice">
-        <div class="dice-face face-1"><span></span></div>
-        <div class="dice-face face-2"><span></span><span></span></div>
-        <div class="dice-face face-3"><span></span><span></span><span></span></div>
-        <div class="dice-face face-4"><span></span><span></span><span></span><span></span></div>
-        <div class="dice-face face-5"><span></span><span></span><span></span><span></span><span></span></div>
-        <div class="dice-face face-6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      </div>
-    </div>
-    <div class="dice-result-text" id="dice-result-text"></div>
-    <div class="dice-reward-text" id="dice-reward-text"></div>
-    <button class="dice-roll-btn" id="dice-roll-btn" data-i18n="dice_roll_btn">Roll!</button>
-  </div>
-</div>
-
-<!-- ══════════════════ DICE2 MODAL (6h cooldown) ══════════════════ -->
-<div class="modal-overlay dice-overlay dice2-overlay" id="dice2-modal" style="display:none">
-  <div class="dice-sheet">
-    <div class="dice-header">
-      <div class="dice-title" data-i18n="dice2_modal_title">Roll for POWER</div>
-      <button class="dice-close" id="dice2-close"><i data-lucide="x"></i></button>
-    </div>
-    <div class="dice-sub" data-i18n="dice2_modal_sub">Watch a quick ad, then roll the dice!</div>
-    <div class="dice-prize-grid">
-      <div class="dice-prize-item"><div class="face"><span>⚀</span> 1</div><div class="reward">1 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚁</span> 2</div><div class="reward">2 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚂</span> 3</div><div class="reward">3 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚃</span> 4</div><div class="reward">5 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚄</span> 5</div><div class="reward">7 POWER</div></div>
-      <div class="dice-prize-item"><div class="face"><span>⚅</span> 6</div><div class="reward">12 POWER</div></div>
-    </div>
-    <div class="dice-wrap" id="dice2-wrap">
-      <div class="dice" id="dice2">
-        <div class="dice-face face-1"><span></span></div>
-        <div class="dice-face face-2"><span></span><span></span></div>
-        <div class="dice-face face-3"><span></span><span></span><span></span></div>
-        <div class="dice-face face-4"><span></span><span></span><span></span><span></span></div>
-        <div class="dice-face face-5"><span></span><span></span><span></span><span></span><span></span></div>
-        <div class="dice-face face-6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      </div>
-    </div>
-    <div class="dice-result-text" id="dice2-result-text"></div>
-    <div class="dice-reward-text" id="dice2-reward-text"></div>
-    <button class="dice-roll-btn dice2-roll-btn" id="dice2-roll-btn" data-i18n="dice_roll_btn">Roll!</button>
-  </div>
-</div>
-
-<!-- ══════════════════ SLOT — PLAY MODAL ══════════════════ -->
-<div class="slot-overlay" id="slot-modal" style="display:none">
-  <div class="slot-sheet">
-    <div class="slot-header">
-      <div class="slot-title" data-i18n="slot_modal_title">Fruit Slots</div>
-      <button class="slot-close" id="slot-close"><i data-lucide="x"></i></button>
-    </div>
-    <div class="slot-sub" data-i18n="slot_modal_sub">Spin every 15 min · Win POWER!</div>
-
-    <!-- Prize table -->
-    <div class="slot-prize-grid">
-      <div class="slot-prize-item slot-prize--star">
-        <div class="slot-prize-symbols">⭐⭐⭐</div>
-        <div class="slot-prize-reward">25 POWER</div>
-      </div>
-      <div class="slot-prize-item">
-        <div class="slot-prize-symbols">🍒🍒🍒</div>
-        <div class="slot-prize-reward">10 POWER</div>
-      </div>
-      <div class="slot-prize-item">
-        <div class="slot-prize-symbols">🍋🍋🍋</div>
-        <div class="slot-prize-reward">10 POWER</div>
-      </div>
-      <div class="slot-prize-item">
-        <div class="slot-prize-symbols">🍊🍊🍊</div>
-        <div class="slot-prize-reward">10 POWER</div>
-      </div>
-      <div class="slot-prize-item">
-        <div class="slot-prize-symbols">🍇🍇🍇</div>
-        <div class="slot-prize-reward">10 POWER</div>
-      </div>
-      <div class="slot-prize-item">
-        <div class="slot-prize-symbols slot-prize-symbols--small" data-i18n="slot_two_match_label">Any 2</div>
-        <div class="slot-prize-reward">3 POWER</div>
-      </div>
-    </div>
-
-    <!-- Reels -->
-    <div class="slot-wrap">
-      <div class="slot-machine-body">
-        <div class="slot-reel-box" id="slot-r1"><span>🎰</span></div>
-        <div class="slot-reel-divider"></div>
-        <div class="slot-reel-box" id="slot-r2"><span>🎰</span></div>
-        <div class="slot-reel-divider"></div>
-        <div class="slot-reel-box" id="slot-r3"><span>🎰</span></div>
-      </div>
-      <div class="slot-payline"></div>
-    </div>
-
-    <button class="dice-roll-btn" id="slot-spin-btn-modal" data-i18n="slot_watch_ad_btn">Watch Ad &amp; Spin 🎰</button>
-  </div>
-</div>
-
-<!-- ══════════════════ SLOT — RESULT MODAL ══════════════════ -->
-<div class="slot-overlay" id="slot-result-modal" style="display:none">
-  <div class="slot-sheet slot-result-sheet">
-    <div class="slot-result-reels">
-      <span id="slotres-r1">🎰</span>
-      <span id="slotres-r2">🎰</span>
-      <span id="slotres-r3">🎰</span>
-    </div>
-    <div class="slot-result-badge" id="slot-result-badge"></div>
-    <div class="slot-result-power" id="slot-result-power"></div>
-    <div class="slot-result-msg" id="slot-result-msg"></div>
-    <div class="slot-result-timer-label" data-i18n="slot_next_spin_label">Next spin in</div>
-    <div class="slot-result-timer" id="slot-result-timer">15:00</div>
-    <button class="dice-roll-btn slot-result-close-btn" id="slot-result-close" data-i18n="slot_result_close">Got it!</button>
-  </div>
-</div>
-
 <!-- ══════════════════ WITHDRAW MODAL ══════════════════ -->
 <div class="modal-overlay wd-overlay" id="withdraw-modal">
   <div class="modal-sheet wd-sheet">
@@ -871,8 +724,8 @@
     <input type="url" id="input-modal-field" class="input-modal-input" placeholder="" autocomplete="off" />
     <div id="input-modal-error" class="input-modal-error"></div>
     <div style="display:flex;gap:10px;margin-top:4px">
-      <button class="dice-roll-btn" id="input-modal-cancel" style="flex:1;background:var(--card-h);color:var(--t2);box-shadow:none">Cancelar</button>
-      <button class="dice-roll-btn alert-ok-btn" id="input-modal-confirm" style="flex:2">Confirmar</button>
+      <button class="dice-roll-btn" id="input-modal-cancel" style="flex:1;background:var(--card-h);color:var(--t2);box-shadow:none">Cancel</button>
+      <button class="dice-roll-btn alert-ok-btn" id="input-modal-confirm" style="flex:2">Confirm</button>
     </div>
   </div>
 </div>
@@ -884,7 +737,7 @@
       <i data-lucide="gift" style="width:32px;height:32px"></i>
     </div>
     <div>
-      <div style="font-size:1.3rem;font-weight:700;color:var(--t1);margin-bottom:6px" data-i18n="welcome_modal_title">Welcome to TrueMine!</div>
+      <div style="font-size:1.3rem;font-weight:700;color:var(--t1);margin-bottom:6px" data-i18n="welcome_modal_title">Welcome to Every Gram Swap!</div>
       <div style="font-size:0.95rem;color:var(--t2);line-height:1.4" data-i18n="welcome_modal_sub">Here is your welcome bonus to start mining.</div>
     </div>
     <div style="background:var(--card-h);width:100%;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)">
@@ -897,23 +750,5 @@
 
 <script src="i18n.js?v=2"></script>
 <script src="app.js?v=6"></script>
-<script>
-  (function waitForAd() {
-    if (typeof show_ === 'function') {
-      show_({
-        type: 'inApp',
-        inAppSettings: {
-          frequency: 2,
-          capping: 0.1,
-          interval: 30,
-          timeout: 20,
-          everyPage: false
-        }
-      });
-    } else {
-      setTimeout(waitForAd, 300);
-    }
-  })();
-</script>
 </body>
 </html>
